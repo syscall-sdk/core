@@ -29,3 +29,6 @@ the details regarding:
 ## 0x02: stay updated
 
 this file will be updated as soon as the economic paper is validated<br>
+
+### [ [ > 👾 join the discord (dev) < ] ](https://discord.gg/x835STNQsP)<br>
+> direct access to founders and early-adopters<br><br>
