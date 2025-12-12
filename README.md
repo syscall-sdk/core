@@ -146,11 +146,11 @@ don't get stuck in user-space<br>
 
 ```
 
-### [ [ > 👾 join the discord (dev) < ] ](https://discord.gg/ton-lien-ici)<br>
+### [ [ > 👾 join the discord (dev) < ] ](https://github.com/syscall-sdk/core)<br>
 > direct access to founders and early-adopters<br><br>
 
-### [ [ > 📜 read the whitepaper < ] ](https://ton-site.com/whitepaper)<br>
+### [ [ > 📜 read the whitepaper < ] ](https://github.com/syscall-sdk/core)<br>
 > detailed technical vision & tokenomics<br><br>
 
-### [ [ > ⚡ support the project < ] ](https://ton-site.com/invest)<br>
+### [ [ > ⚡ support the project < ] ](https://github.com/syscall-sdk/core)<br>
 > become a "founding node" (early access)<br><br>
