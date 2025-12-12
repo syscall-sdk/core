@@ -14,10 +14,10 @@
 
 we are currently designing the economic architecture of the protocol<br>
 to ensure the network remains trustless and decentralized, we are taking the time to build a robust model<br>
-the details regarding:<br>
- * node licenses<br>
- * community raise<br>
- * treasury address<br>
+the details regarding:
+ * node licenses
+ * community raise
+ * treasury address
 are currently being drafted by the core team<br>
 
 --------------------------------
