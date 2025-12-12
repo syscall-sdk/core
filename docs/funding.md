@@ -18,7 +18,8 @@ the details regarding:
  * node licenses
  * community raise
  * treasury address
-<br><br>are currently being drafted by the core team<br>
+   
+<br>are currently being drafted by the core team<br>
 
 --------------------------------
 
