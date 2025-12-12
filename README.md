@@ -12,7 +12,7 @@
 
 --------------------------------
 
-## 0x01: the manifesto
+## 0x00: the manifesto
 
 syscall-sdk is the missing link between blockchain and reality<br>
 while traditional oracles import real-world data to the blockchain, syscall-sdk exports blockchain actions to the real world<br>
@@ -21,7 +21,7 @@ with just a single line of code, developers can send emails and sms, post on x (
 
 --------------------------------
 
-## 0x02: the paradigm shift
+## 0x01: the paradigm shift
 
 traditional oracles are **read-only**: they pull data from the world onto the chain<br>
 syscall-sdk is **write-enabled**: it pushes blockchain intent out to the real world<br>
@@ -56,7 +56,7 @@ syscall-sdk is **write-enabled**: it pushes blockchain intent out to the real wo
 
 --------------------------------
 
-## 0x03: architecture & data flow
+## 0x02: architecture & data flow
 
 the architecture is designed to be trustless<br>
 the execution of off-chain actions (email, sms, api calls) is strictly conditioned by the cryptographic verification of the on-chain payment<br>
@@ -102,7 +102,7 @@ the execution of off-chain actions (email, sms, api calls) is strictly condition
 
 --------------------------------
 
-## 0x04: roadmap & funding
+## 0x03: roadmap & funding
 
 we are not just writing code, we are mapping a new infrastructure<br>
 this roadmap is our commitment to shipping<br>
@@ -131,7 +131,7 @@ phase 3 : autonomy (h2 2026) - decentralization
 
 --------------------------------
 
-## 0x05: join the network
+## 0x04: join the network
 
 the code is live<br>
 the network is forming<br>
