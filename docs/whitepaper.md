@@ -23,3 +23,6 @@ the specifications are being forged in the discord<br>
 ## 0x02: stay updated
 
 this file will be updated as soon as the white paper is validated<br>
+
+### [ [ > 👾 join the discord (dev) < ] ](https://discord.gg/x835STNQsP)<br>
+> direct access to founders and early-adopters<br><br>
