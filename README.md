@@ -14,17 +14,17 @@
 
 ## 0x01: the manifesto
 
-syscall-sdk is the missing link between blockchain and reality
-while traditional oracles import real-world data to the blockchain, syscall-sdk exports blockchain actions to the real world
-syscall-sdk extends the blockchain's capabilities beyond its native environment
-with just a single line of code, developers can send emails and sms, post on x (twitter), control telegram bots, or trigger ai agents
+syscall-sdk is the missing link between blockchain and reality<br>
+while traditional oracles import real-world data to the blockchain, syscall-sdk exports blockchain actions to the real world<br>
+syscall-sdk extends the blockchain's capabilities beyond its native environment<br>
+with just a single line of code, developers can send emails and sms, post on x (twitter), control telegram bots, or trigger ai agents<br>
 
 --------------------------------
 
 ## 0x02: the paradigm shift
 
-traditional oracles are **read-only**: they pull data from the world onto the chain
-syscall-sdk is **write-enabled**: it pushes blockchain intent out to the real world
+traditional oracles are **read-only**: they pull data from the world onto the chain<br>
+syscall-sdk is **write-enabled**: it pushes blockchain intent out to the real world<br>
 
 ```text
    [ traditional oracle ]                    [ syscall-sdk ]
@@ -58,8 +58,8 @@ syscall-sdk is **write-enabled**: it pushes blockchain intent out to the real wo
 
 ## 0x03: architecture & data flow
 
-the architecture is designed to be trustless
-the execution of off-chain actions (email, sms, api calls) is strictly conditioned by the cryptographic verification of the on-chain payment
+the architecture is designed to be trustless<br>
+the execution of off-chain actions (email, sms, api calls) is strictly conditioned by the cryptographic verification of the on-chain payment<br>
 
 ```text
                                                 +-----------------------+                                                                 +-----------------------+
@@ -104,8 +104,8 @@ the execution of off-chain actions (email, sms, api calls) is strictly condition
 
 ## 0x04: roadmap & funding
 
-we are not just writing code, we are mapping a new infrastructure
-this roadmap is our commitment to shipping
+we are not just writing code, we are mapping a new infrastructure<br>
+this roadmap is our commitment to shipping<br>
 
 ```text
 phase 1 : genesis (q1 2026) - foundation
@@ -133,9 +133,9 @@ phase 3 : autonomy (h2 2026) - decentralization
 
 ## 0x05: join the network
 
-the code is live
-the network is forming
-don't get stuck in user-space
+the code is live<br>
+the network is forming<br>
+don't get stuck in user-space<br>
 
 ```text
      _    ___    _   _   _    
@@ -146,15 +146,11 @@ don't get stuck in user-space
 
 ```
 
-### [ [ > 👾 join the discord (dev) < ] ](https://discord.gg/ton-lien-ici)
-> direct access to founders and early-adopters
+### [ [ > 👾 join the discord (dev) < ] ](https://discord.gg/ton-lien-ici)<br>
+> direct access to founders and early-adopters<br><br>
 
-<br>
+### [ [ > 📜 read the whitepaper < ] ](https://ton-site.com/whitepaper)<br>
+> detailed technical vision & tokenomics<br><br>
 
-### [ [ > 📜 read the whitepaper < ] ](https://ton-site.com/whitepaper)
-> detailed technical vision & tokenomics
-
-<br>
-
-### [ [ > ⚡ support the project < ] ](https://ton-site.com/invest)
-> become a "founding node" (early access)
+### [ [ > ⚡ support the project < ] ](https://ton-site.com/invest)<br>
+> become a "founding node" (early access)<br><br>
