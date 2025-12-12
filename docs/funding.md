@@ -13,7 +13,7 @@
 
 --------------------------------
 
-## 0x01: work in progress
+## 0x00: work in progress
 
 we are currently designing the economic architecture of the protocol<br>
 to ensure the network remains trustless and decentralized, we are taking the time to build a robust model<br>
@@ -26,7 +26,7 @@ the details regarding:
 
 --------------------------------
 
-## 0x02: stay updated
+## 0x01: stay updated
 
 this file will be updated as soon as the economic paper is validated<br>
 
