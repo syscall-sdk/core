@@ -1,14 +1,24 @@
 ```text
-   __          __  ____   _____   _  __
-   \ \        / / / __ \ |  __ \ | |/ /
-    \ \  /\  / / | |  | || |__) || ' / 
-     \ \/  \/ /  | |  | ||  _  / |  <  
-      \  /\  /   | |__| || | \ \ | . \ 
-       \/  \/     \____/ |_|  \_\|_|\_\
+
+__          __  _    _   _____   _______   ______ 
+\ \        / / | |  | | |_   _| |__   __| |  ____|
+ \ \  /\  / /  | |__| |   | |      | |    | |__   
+  \ \/  \/ /   |  __  |   | |      | |    |  __|  
+   \  /\  /    | |  | |  _| |_     | |    | |____ 
+    \/  \/     |_|  |_| |_____|    |_|    |______|
                                        
-   > status: compiling...
-   > eta: q2 2026
-   
-   the architecture is live in the readme
-   the specifications are being forged in the discord
+  > status: compiling...
 ```
+
+--------------------------------
+
+## 0x01: work in progress
+
+the architecture is live in the readme<br>
+the specifications are being forged in the discord<br>
+
+--------------------------------
+
+## 0x02: stay updated
+
+this file will be updated as soon as the white paper is validated<br>
