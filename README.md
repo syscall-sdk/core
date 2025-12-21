@@ -7,7 +7,7 @@
  |_____/    |_||_____/  \_____/_/    \_\______|______|     |_____/ |_____/|_|\_\
                                                                                 
   > the reverse oracle
-  > version: 0.1.0-alpha / architecture specs only
+  > version: 0.0.3 / alpha
 ```
 
 --------------------------------
