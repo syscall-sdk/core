@@ -2,7 +2,7 @@ const { ethers } = require("ethers");
 
 // --- Configuration ---
 const RPC_URL = "https://topstrike-megaeth-ws-proxy-100.fly.dev/rpc";
-const REGISTRY_ADDRESS = "0x89a6A03E4FDec36269e525D435FC54caf2167996";
+const REGISTRY_ADDRESS = "0x68704764C29886ed623b0f3CD30516Bf0643f390";
 const RELAYER_URL = process.env.RELAYER_URL || "http://localhost:8080"; 
 
 // --- ABIs ---
