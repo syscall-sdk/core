@@ -1,0 +1,16 @@
+services:
+  syscall-relayer:
+    build: .
+    container_name: syscall-relayer
+    restart: always
+    ports:
+      - "8080:8000" # On accède via le port 8080 sur le serveur
+    volumes:
+      # C'est ici que la magie opère pour l'historique des logs
+      - ./logs:/app/logs
+    networks:
+      - services-net
+
+networks:
+  services-net:
+    external: true
