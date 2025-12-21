@@ -1,5 +1,5 @@
 const readline = require('readline');
-const Syscall = require('./syscall-sdk'); 
+const Syscall = require('../syscall-sdk/syscall-sdk'); 
 require('dotenv').config(); 
 
 const rl = readline.createInterface({
