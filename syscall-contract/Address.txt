@@ -1,5 +1,0 @@
-Déploiement SyscallContract Testnet MegaETH : https://www.megaexplorer.xyz/tx/0x0ffda5938b5d7976477801e8f850bf7044f3d2783964d9ccbeffe4f7cfd061aa
-Contrat SyscallContract Testnet MegaETH : https://www.megaexplorer.xyz/address/0xfFC6029Ec491cc15FE5Eb525B5d6E217371C45aB
-
-Déploiement SyscallAddressRegistry Testnet MegaETH : https://www.megaexplorer.xyz/tx/0x17e7590f77bd539c283c967295bc66e008219808852bc6f43427ab1cc33e4898
-Contrat SyscallAddressRegistry Testnet MegaETH : https://www.megaexplorer.xyz/address/0x89a6A03E4FDec36269e525D435FC54caf2167996
