@@ -1,9 +1,9 @@
 testnet timothy :
 syscall-wallet :  https://www.megaexplorer.xyz/address/0x5D7AD1fBcf15d9C69D31F431e4930ca0c96666B4
-syscall-address-registry : https://www.megaexplorer.xyz/address/0x89a6A03E4FDec36269e525D435FC54caf2167996
+syscall-proxy : https://www.megaexplorer.xyz/address/0x89a6A03E4FDec36269e525D435FC54caf2167996
 syscall-contract : https://www.megaexplorer.xyz/address/0x873493aa3F563C2d28468C9988a9Bbad4d26DC7e
 
 mainnet frontier :
 syscall-wallet : https://megaeth.blockscout.com/address/0x5D7AD1fBcf15d9C69D31F431e4930ca0c96666B4
-syscall-address-registry : waiting whitelisting (hurry up mega team :-) ...
+syscall-proxy : waiting whitelisting (hurry up mega team :-) ...
 syscall-contract : waiting whitelisting (hurry up mega team :-) ...
