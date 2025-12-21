@@ -1,5 +1,5 @@
 const readline = require('readline');
-const Syscall = require('../syscall-sdk/syscall-sdk'); 
+const Syscall = require('./syscall-sdk'); 
 require('dotenv').config(); 
 
 const rl = readline.createInterface({
@@ -66,7 +66,7 @@ async function main() {
         console.log(`Relayer Status:   ${result.relayerStatus}`);
         
         console.log("\n🔐 [SECURITY TOKEN RECEIVED]");
-        // --- AFFICHAGE DU JWT ---
+        // --- DISPLAYING JWT ---
         console.log(result.jwt); 
         console.log("------------------------------------------");
         
