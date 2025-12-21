@@ -13,7 +13,7 @@ from web3.exceptions import TransactionNotFound
 PORT = int(os.getenv("PORT", 8000))
 RPC_URL = os.getenv("RPC_URL", "https://topstrike-megaeth-ws-proxy-100.fly.dev/rpc") 
 PROXY_ADDRESS = "0x68704764C29886ed623b0f3CD30516Bf0643f390"
-JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-syscall-key-2026") # Clé secrète pour signer
+JWT_SECRET = os.getenv("JWT_SECRET", "super-secret-syscall-key-2026") # Secret key for signing
 
 # --- ABIs ---
 PROXY_ABI = '[{"inputs":[],"name":"syscallContract","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}]'
@@ -125,7 +125,7 @@ async def dispatch_action(payload: DispatchPayload, authorization: str = Header(
         decoded = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
         logger.info(f"[Step 7] Gateway received valid JWT. Intent: Send {decoded.get('svc')} to {payload.destination}")
 
-        # [Step 8] Simulation d'envoi
+        # [Step 8] Simulation of sending
         return {
             "status": "delivered",
             "service": decoded.get("svc"),
@@ -138,3 +138,4 @@ async def dispatch_action(payload: DispatchPayload, authorization: str = Header(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=PORT)
+    
