@@ -8,9 +8,16 @@ from web3 import Web3
 from web3.exceptions import TransactionNotFound
 
 # --- Configuration ---
-# Ensure this matches your Docker setup (usually port 8000 or 8080)
 PORT = int(os.getenv("PORT", 8000))
 RPC_URL = os.getenv("RPC_URL", "https://topstrike-megaeth-ws-proxy-100.fly.dev/rpc") 
+
+# Proxy (Registry) Address - The only hardcoded address the system needs to trust.
+#
+PROXY_ADDRESS = "0x68704764C29886ed623b0f3CD30516Bf0643f390"
+
+# --- Minimal ABIs for reading ---
+PROXY_ABI = '[{"inputs":[],"name":"syscallContract","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"}]'
+CONTRACT_ABI = '[{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"paymentId","type":"uint256"},{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"string","name":"name","type":"string"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"timestamp","type":"uint256"}],"name":"ActionPaid","type":"event"}, {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"isConsumed","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}]'
 
 # --- Logger Configuration ---
 if not os.path.exists("logs"):
@@ -33,39 +40,91 @@ app = FastAPI(title="Syscall Relayer", version="0.1.0-alpha")
 
 # --- Data Models ---
 class VerificationPayload(BaseModel):
-    tx_hash: str        # Step 4: The mined transaction hash
-    signature: str      # Step 4: The user's signature
-    sender: str         # Step 4: The user's wallet address
+    tx_hash: str        
+    signature: str      
+    sender: str         
 
 # --- Utility Functions ---
 
+def get_authoritative_contract(w3: Web3) -> str:
+    """
+    Queries the Proxy to get the current authoritative SyscallContract address.
+    """
+    try:
+        proxy = w3.eth.contract(address=PROXY_ADDRESS, abi=PROXY_ABI)
+        contract_address = proxy.functions.syscallContract().call()
+        logger.debug(f"[Security] Authoritative Contract Address from Proxy: {contract_address}")
+        return contract_address
+    except Exception as e:
+        logger.critical(f"[Security] Failed to fetch contract from proxy: {e}")
+        return None
+
 def verify_payment_on_chain(tx_hash: str) -> bool:
     """
-    [Step 5] Verify Payment
-    Connects to the RPC and confirms the transaction was mined successfully.
+    Full and secure payment verification.
+    Checks: Status, Destination Address, Event Logs, and Consumed State.
     """
     try:
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
-        
         if not w3.is_connected():
             logger.critical(f"Failed to connect to RPC URL: {RPC_URL}")
             return False
 
-        logger.debug(f"[Step 5] Querying RPC for TX: {tx_hash}")
+        logger.debug(f"[Step 5] Analyzing TX: {tx_hash}")
 
+        # 1. Fetch transaction receipt
         try:
             tx_receipt = w3.eth.get_transaction_receipt(tx_hash)
         except TransactionNotFound:
-            logger.warning(f"[Step 5] Transaction not found on chain: {tx_hash}")
+            logger.warning(f"[Step 5] Transaction not found: {tx_hash}")
             return False
 
-        # Status 1 means success, 0 means revert
-        if tx_receipt['status'] == 1:
-            logger.info(f"[Step 5] SUCCESS: TX {tx_hash} is valid (Block: {tx_receipt['blockNumber']})")
-            return True
-        else:
-            logger.warning(f"[Step 5] FAILED: TX {tx_hash} status is 0 (Reverted)")
+        # 2. Verify Status (1 = Success, 0 = Fail)
+        if tx_receipt['status'] != 1:
+            logger.warning(f"[Step 5] Transaction failed (Status 0): {tx_hash}")
             return False
+
+        # 3. Fetch authoritative address via Proxy
+        target_contract = get_authoritative_contract(w3)
+        if not target_contract:
+            return False
+
+        # 4. Verify funds went to the correct contract
+        # Note: tx_receipt['to'] can be null for contract creation, hence the check.
+        if tx_receipt['to'].lower() != target_contract.lower():
+            logger.warning(f"[Step 5] Security Alert: TX sent to {tx_receipt['to']}, expected {target_contract}")
+            return False
+
+        # 5. Decode logs to find the paymentId
+        # We use the contract ABI to parse logs from this specific receipt
+        contract = w3.eth.contract(address=target_contract, abi=CONTRACT_ABI)
+        
+        # Look for 'ActionPaid' event in the transaction logs
+        action_paid_events = contract.events.ActionPaid().process_receipt(tx_receipt)
+        
+        if not action_paid_events:
+            logger.warning(f"[Step 5] No ActionPaid event found in transaction logs.")
+            return False
+            
+        # Take the first event (one tx = one payment in our case)
+        event_args = action_paid_events[0]['args']
+        payment_id = event_args['paymentId']
+        logger.info(f"[Step 5] Payment identified: ID {payment_id} | Amount: {event_args['amount']}")
+
+        # 6. Check if payment was already consumed (Anti-Replay)
+        is_consumed = contract.functions.isConsumed(payment_id).call()
+        
+        if is_consumed:
+            logger.warning(f"[Step 5] REPLAY ATTACK BLOCKED: Payment ID {payment_id} already consumed.")
+            return False
+
+        logger.info(f"[Step 5] SECURITY CHECKS PASSED for Payment ID {payment_id}")
+        
+        # TODO: At this stage, in a real system, the Relayer should call 
+        # contract.functions.consumePayment(payment_id).transact() to "burn" the payment.
+        # For now, we return True to authorize the action.
+        
+        return True
 
     except Exception as e:
         logger.error(f"Unexpected Web3 Error: {str(e)}")
@@ -76,24 +135,19 @@ def verify_payment_on_chain(tx_hash: str) -> bool:
 @app.on_event("startup")
 async def startup_event():
     logger.info(f">>> SYSCALL RELAYER LISTENING ON PORT {PORT} <<<")
+    logger.info(f">>> LINKED TO REGISTRY: {PROXY_ADDRESS} <<<")
 
 @app.post("/verify")
 async def verify_transaction(payload: VerificationPayload, request: Request):
-    """
-    [Step 4] Receive Sig + TxHash
-    [Step 5] Verify Payment
-    [Step 6] Return JWT (Mocked)
-    """
     client_host = request.client.host
-    logger.info(f"[Step 4] Received verification request from {client_host} | Sender: {payload.sender}")
-    logger.debug(f"[Step 4] Payload: {payload.dict()}")
+    logger.info(f"[Step 4] Request from {client_host} | Sender: {payload.sender}")
     
-    # Execute Step 5
+    # Execute Step 5 (Deep Verification)
     payment_valid = verify_payment_on_chain(payload.tx_hash)
 
     if not payment_valid:
         logger.warning(f"Verification FAILED for TX: {payload.tx_hash}")
-        raise HTTPException(status_code=400, detail="Transaction failed or not found on-chain")
+        raise HTTPException(status_code=400, detail="Transaction invalid, unauthorized contract, or already consumed.")
 
     # Step 6: Return JWT (Simulated)
     logger.info(f"[Step 6] Issuing JWT for {payload.sender}")
