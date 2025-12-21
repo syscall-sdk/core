@@ -1,17 +1,12 @@
 const readline = require('readline');
-const Syscall = require('./syscall-sdk'); // Imports your SDK
-require('dotenv').config(); // Loads variables from .env if present
+const Syscall = require('./syscall-sdk'); 
+require('dotenv').config(); 
 
-// Create an interface for reading input from the console
 const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
+    input: process.stdin, output: process.stdout
 });
 
-// Helper function to ask questions using Promises
-const askQuestion = (query) => {
-    return new Promise((resolve) => rl.question(query, resolve));
-};
+const askQuestion = (query) => new Promise((resolve) => rl.question(query, resolve));
 
 async function main() {
     console.clear();
@@ -20,50 +15,83 @@ async function main() {
     console.log("==========================================\n");
 
     try {
-        // 1. Get Private Key
-        // Priority: Check .env file first, otherwise ask user
+        // --- 1. Get Private Key ---
         let privateKey = process.env.PRIVATE_KEY;
-        
         if (!privateKey) {
-            console.log("No PRIVATE_KEY found in .env file.");
-            privateKey = await askQuestion("Enter your Wallet Private Key: ");
+            privateKey = await askQuestion("Enter Wallet Private Key: ");
         } else {
-            console.log("Using Private Key from .env file.");
+            // [RESTORED] Visual style from screenshot
+            console.log("✅ Using Private Key from .env");
         }
 
-        if (!privateKey.startsWith("0x")) {
-            console.warn("Warning: Private key usually starts with '0x'.");
-        }
-
-        // 2. Initialize SDK
-        console.log("\n[1/4] Initializing SDK...");
+        console.log("[1/4] Initializing SDK...");
         const syscall = new Syscall(privateKey);
 
-        // 3. Get Recipient Information
-        console.log("\n[2/4] Enter Transaction Details:");
-        const phoneNumber = await askQuestion("Target Phone Number (e.g. +33612345678): ");
-        const message = await askQuestion("Message Content: ");
+        // --- 2. Select Service & Prepare Details ---
+        console.log("\n[2/4] Preparing Transaction Details:");
+        
+        console.log("Select Service:");
+        console.log("   1. Send SMS");
+        console.log("   2. Send Email");
+        const choice = await askQuestion("   > Choice (1 or 2): ");
 
-        if (!phoneNumber || !message) {
-            throw new Error("Phone number and message are required.");
+        let result;
+        
+        if (choice === '1') {
+            // SMS Logic
+            let phoneNumber = process.env.TEST_PHONE;
+            if (phoneNumber) {
+                console.log(`✅ Using Phone from .env: ${phoneNumber}`);
+            } else {
+                phoneNumber = await askQuestion("Target Phone Number: ");
+            }
+
+            let message = process.env.TEST_MESSAGE;
+            if (message) {
+                console.log(`✅ Using Message from .env: "${message}"`);
+            } else {
+                message = await askQuestion("Message Content: ");
+            }
+
+            console.log("\n[3/4] Processing Payment & Action...");
+            console.log("------------------------------------------");
+            result = await syscall.sendSMS(phoneNumber, message);
+
+        } else if (choice === '2') {
+            // Email Logic
+            let email = process.env.TEST_EMAIL;
+            if (email) {
+                console.log(`✅ Using Email from .env: ${email}`);
+            } else {
+                email = await askQuestion("Target Email Address: ");
+            }
+
+            let message = process.env.TEST_MESSAGE;
+            if (message) {
+                console.log(`✅ Using Message from .env: "${message}"`);
+            } else {
+                message = await askQuestion("Message Content: ");
+            }
+
+            console.log("\n[3/4] Processing Payment & Action...");
+            console.log("------------------------------------------");
+            result = await syscall.sendEmail(email, message);
+
+        } else {
+            throw new Error("Invalid choice.");
         }
 
-        // 4. Execute Transaction
-        console.log("\n[3/4] Processing Payment & Action...");
-        console.log("------------------------------------------");
-        
-        // Call the SDK function created previously
-        const txHash = await syscall.sendSMS(phoneNumber, message);
-
-        // 5. Success Output
+        // --- Success Output ---
         console.log("------------------------------------------");
         console.log("\n[4/4] SUCCESS! 🚀");
-        console.log(`Transaction Hash: ${txHash}`);
-        console.log(`Explorer Link: https://megaeth-testnet.explorer.io/tx/${txHash}`); // Example link
+        console.log(`Transaction Hash: ${result.txHash}`);
+        
+        // [NEW] Display Relayer Info cleanly
+        console.log(`Relayer Status:   ${result.relayerStatus.toUpperCase()}`);
+        console.log(`JWT Token:        ${result.jwt ? "Received (Authorized)" : "None"}`);
         
     } catch (error) {
-        console.error("\n❌ ERROR:");
-        console.error(error.message || error);
+        console.error("\n❌ ERROR:", error.message || error);
     } finally {
         rl.close();
         process.exit(0);
