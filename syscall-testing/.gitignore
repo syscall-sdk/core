@@ -1,0 +1,4 @@
+PRIVATE_KEY=PrivateKeyHere
+TEST_PHONE=+33612345678
+TEST_EMAIL=test@test.fr
+TEST_MESSAGE=Hello World
