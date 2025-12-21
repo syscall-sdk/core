@@ -35,7 +35,7 @@ class Syscall {
     return address;
   }
 
-  // [Step 4 -> 6] Récupération du JWT
+  // [Step 4 -> 6] Retrieve JWT
   async _notifyRelayer(txHash) {
     console.log("[SDK] [Step 4] Requesting Authorization from Relayer...");
     const signature = await this.signer.signMessage(txHash);
@@ -53,7 +53,7 @@ class Syscall {
     return data.jwt;
   }
 
-  // [Step 7] Envoi JWT + Data à la Gateway
+  // [Step 7] Send JWT + Data to Gateway
   async _deliverAction(jwt, destination, content) {
     console.log("[SDK] [Step 7] Sending JWT + Data to Gateway...");
     
@@ -61,7 +61,7 @@ class Syscall {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${jwt}` // Utilisation du Token
+            'Authorization': `Bearer ${jwt}` // Using the Token
         },
         body: JSON.stringify({ destination: destination, content: content })
     });
@@ -74,7 +74,7 @@ class Syscall {
     await this._init();
 
     try {
-      // 1-3. Paiement Blockchain
+      // 1-3. Blockchain Payment
       const contractAddress = await this._resolveContractAddress();
       console.log(`[SDK] Resolved SyscallContract at: ${contractAddress}`);
       const syscallContract = new ethers.Contract(contractAddress, SYSCALL_ABI, this.signer);
@@ -94,13 +94,13 @@ class Syscall {
       const receipt = await tx.wait();
       console.log(`[SDK] Confirmed in block: ${receipt.blockNumber}`);
 
-      // 4-6. Obtention du JWT
+      // 4-6. Obtaining JWT
       const jwt = await this._notifyRelayer(receipt.hash);
 
-      // 7. Exécution via Gateway
+      // 7. Execution via Gateway
       const deliveryResult = await this._deliverAction(jwt, destination, content);
 
-      // On retourne le JWT pour qu'il soit affiché par le testeur
+      // Return JWT to be displayed by the tester
       return {
           txHash: receipt.hash,
           relayerStatus: "DELIVERED",
