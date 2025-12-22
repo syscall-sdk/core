@@ -1,13 +1,10 @@
 const { ethers } = require("ethers");
 
-// --- Configuration ---
-const RPC_URL = process.env.RPC_URL || "https://topstrike-megaeth-ws-proxy-100.fly.dev/rpc";
-const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || "0x68704764C29886ed623b0f3CD30516Bf0643f390";
-const RELAYER_URL = process.env.RELAYER_URL || "http://localhost:8080"; 
+// Configuration: Only the Relayer location is needed initially.
+// Everything else (RPC, Contract Address) will be fetched from there.
+const RELAYER_URL = "https://syscall-relayer.syscall-sdk.com";
 
-const REGISTRY_ABI = ["function syscallContract() view returns (address)"];
-
-// MODIFIED ABI: pay accepts (string name, uint256 quantity)
+// ABI for the main Syscall Contract (pay function)
 const SYSCALL_ABI = [
     "function services(string name) view returns (uint256)", 
     "function pay(string name, uint256 quantity) payable" 
@@ -18,26 +15,55 @@ class Syscall {
     this.provider = null;
     this.signer = null;
     this.signerSource = signerSource;
+    this.config = null; // Will hold { rpc_url, contract_address }
+  }
+
+  /**
+   * 🔄 BOOTSTRAP
+   * Fetches the RPC URL and Contract Address directly from the Relayer.
+   */
+  async _fetchConfig() {
+    if (this.config) return;
+
+    try {
+        console.log(`[SDK] 📡 Contacting Relayer for config at ${RELAYER_URL}...`);
+        const response = await fetch(`${RELAYER_URL}/config`);
+        
+        if (!response.ok) throw new Error(`Failed to fetch config: ${response.statusText}`);
+        
+        this.config = await response.json();
+        
+        if (!this.config.rpc_url || !this.config.contract_address) {
+            throw new Error("Invalid config received from Relayer");
+        }
+
+        console.log(`[SDK] ✅ Config received. Target: ${this.config.contract_address}`);
+    } catch (error) {
+        console.error("[SDK] ❌ Initialization Error:", error);
+        throw error;
+    }
   }
 
   async _init() {
+    // 1. Get configuration first
+    await this._fetchConfig();
+
     if (this.signer) return; 
+
+    // 2. Initialize Web3 using the fetched RPC URL
     if (typeof this.signerSource === 'string') {
-      this.provider = new ethers.JsonRpcProvider(RPC_URL);
+      // Backend Mode (Private Key)
+      this.provider = new ethers.JsonRpcProvider(this.config.rpc_url);
       this.signer = new ethers.Wallet(this.signerSource, this.provider);
       console.log("[SDK] Mode: Backend (Private Key)");
     } else {
+      // Frontend Mode (Browser Injection)
+      // Note: In frontend, we usually use window.ethereum, but if we need a specific read-provider
+      // we can use the RPC. Here we assume standard browser injection logic.
       this.provider = new ethers.BrowserProvider(this.signerSource);
       this.signer = await this.provider.getSigner();
       console.log("[SDK] Mode: Frontend (Browser Injection)");
     }
-  }
-
-  async _resolveContractAddress() {
-    const registry = new ethers.Contract(REGISTRY_ADDRESS, REGISTRY_ABI, this.provider);
-    const address = await registry.syscallContract();
-    if (address === ethers.ZeroAddress) throw new Error("SyscallContract address not set.");
-    return address;
   }
 
   async _notifyRelayer(txHash) {
@@ -80,27 +106,25 @@ class Syscall {
   }
 
   async _executePayment(serviceName, destination, content) {
+    // Ensure everything is loaded
     await this._init();
 
     try {
-      const contractAddress = await this._resolveContractAddress();
-      console.log(`[SDK] Resolved SyscallContract at: ${contractAddress}`);
+      // Use the address fetched from Relayer
+      const contractAddress = this.config.contract_address;
+      
       const syscallContract = new ethers.Contract(contractAddress, SYSCALL_ABI, this.signer);
       
       const unitPriceWei = await syscallContract.services(serviceName);
       if (unitPriceWei === 0n) throw new Error(`Service '${serviceName}' inactive.`);
 
-      // Calculate Length
       const encoder = new TextEncoder();
       const messageBytes = encoder.encode(content).length;
-      
-      // Calculate Total Cost
       const totalCost = unitPriceWei * BigInt(messageBytes);
 
       console.log(`[SDK] Service: ${serviceName.toUpperCase()} | Length: ${messageBytes} chars | Cost: ${ethers.formatEther(totalCost)} ETH`);
-      console.log("[SDK] Sending transaction to MegaETH...");
+      console.log("[SDK] Sending transaction...");
       
-      // Pass length to the contract
       const tx = await syscallContract.pay(serviceName, messageBytes, { value: totalCost });
       
       console.log(`[SDK] TX Sent: ${tx.hash}`);
