@@ -53,21 +53,25 @@ class Syscall {
     return data.jwt;
   }
 
-  // [Step 7] Send JWT + Data to Gateway
+  // [Step 7] Send JWT + Data -> [Step 9] Receive Ack
   async _deliverAction(jwt, destination, content) {
-    console.log("[SDK] [Step 7] Sending JWT + Data to Gateway...");
+    console.log("[SDK] [Step 7] Dispatching payload to Gateway...");
     
     const response = await fetch(`${RELAYER_URL}/dispatch`, {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${jwt}` // Using the Token
+            'Authorization': `Bearer ${jwt}`
         },
         body: JSON.stringify({ destination: destination, content: content })
     });
 
     if (!response.ok) throw new Error(`Gateway Delivery Failed: ${response.statusText}`);
-    return await response.json();
+    
+    // [Step 9] Relayer sends back the Ack (Proof of off-chain execution + Proof of on-chain consumption)
+    const ack = await response.json();
+    console.log("[SDK] [Step 9] Acknowledgment Received 📡");
+    return ack;
   }
 
   async _executePayment(serviceName, destination, content) {
@@ -97,15 +101,16 @@ class Syscall {
       // 4-6. Obtaining JWT
       const jwt = await this._notifyRelayer(receipt.hash);
 
-      // 7. Execution via Gateway
-      const deliveryResult = await this._deliverAction(jwt, destination, content);
+      // 7-9. Execution & Acknowledgement
+      const ackData = await this._deliverAction(jwt, destination, content);
 
-      // Return JWT to be displayed by the tester
+      // [Step 10] Return Ack to the caller (User Interface)
       return {
           txHash: receipt.hash,
-          relayerStatus: "DELIVERED",
+          relayerStatus: ackData.status,
           jwt: jwt,
-          gatewayResult: deliveryResult
+          gatewayResult: ackData,
+          consumptionTx: ackData.meta.consumptionTx // The proof that it was consumed
       };
 
     } catch (error) {
