@@ -1,0 +1,4 @@
+PORT=8080
+RPC_URL=https://topstrike-megaeth-ws-proxy-100.fly.dev/rpc
+OWNER_PRIVATE_KEY=PrivateKeyHere
+PROXY_ADDRESS=0x68704764C29886ed623b0f3CD30516Bf0643f390
