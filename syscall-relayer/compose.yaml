@@ -4,12 +4,13 @@ services:
     container_name: syscall-relayer
     restart: always
     ports:
-      - "8080:8000" # On accède via le port 8080 sur le serveur
+      - "8080:8080"
     volumes:
-      # C'est ici que la magie opère pour l'historique des logs
       - ./logs:/app/logs
     networks:
       - services-net
+    env_file:
+      - .env
 
 networks:
   services-net:
