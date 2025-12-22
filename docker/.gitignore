@@ -1,0 +1,11 @@
+# --- Relayer Configuration ---
+PORT=8080
+RPC_URL=https://topstrike-megaeth-ws-proxy-100.fly.dev/rpc
+OWNER_PRIVATE_KEY=PrivateKeyHere
+SYSCALL_CONTRACT_ADDRESS=0xF8e0EDFdc8D72B83E09C6d2765afE47e0a604972
+JWT_SECRET=SecretHere
+
+# --- SMS Configuration ---
+TWILIO_ACCOUNT_SID=TwilioAccountSidHere
+TWILIO_AUTH_TOKEN=TwilioAuthTokenHere
+TWILIO_FROM_NUMBER=TwilioFromNumberHere
