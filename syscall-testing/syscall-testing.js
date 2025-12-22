@@ -1,136 +1,84 @@
-const { ethers } = require("ethers");
+const readline = require('readline');
+const Syscall = require('../syscall-sdk/syscall-sdk'); 
+require('dotenv').config(); 
 
-// --- Configuration ---
-const RPC_URL = process.env.RPC_URL || "https://topstrike-megaeth-ws-proxy-100.fly.dev/rpc";
-const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || "0x68704764C29886ed623b0f3CD30516Bf0643f390";
-const RELAYER_URL = process.env.RELAYER_URL || "http://localhost:8080"; 
+const rl = readline.createInterface({
+    input: process.stdin, output: process.stdout
+});
 
-const REGISTRY_ABI = ["function syscallContract() view returns (address)"];
+const askQuestion = (query) => new Promise((resolve) => rl.question(query, resolve));
 
-// MODIFIED ABI: pay accepts (string name, uint256 quantity)
-const SYSCALL_ABI = [
-    "function services(string name) view returns (uint256)", 
-    "function pay(string name, uint256 quantity) payable" 
-];
-
-class Syscall {
-  constructor(signerSource) {
-    this.provider = null;
-    this.signer = null;
-    this.signerSource = signerSource;
-  }
-
-  async _init() {
-    if (this.signer) return; 
-    if (typeof this.signerSource === 'string') {
-      this.provider = new ethers.JsonRpcProvider(RPC_URL);
-      this.signer = new ethers.Wallet(this.signerSource, this.provider);
-      console.log("[SDK] Mode: Backend (Private Key)");
-    } else {
-      this.provider = new ethers.BrowserProvider(this.signerSource);
-      this.signer = await this.provider.getSigner();
-      console.log("[SDK] Mode: Frontend (Browser Injection)");
-    }
-  }
-
-  async _resolveContractAddress() {
-    const registry = new ethers.Contract(REGISTRY_ADDRESS, REGISTRY_ABI, this.provider);
-    const address = await registry.syscallContract();
-    if (address === ethers.ZeroAddress) throw new Error("SyscallContract address not set.");
-    return address;
-  }
-
-  async _notifyRelayer(txHash) {
-    console.log("[SDK] [Step 4] Requesting Authorization from Relayer...");
-    const signature = await this.signer.signMessage(txHash);
-    const senderAddress = await this.signer.getAddress();
-
-    const response = await fetch(`${RELAYER_URL}/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tx_hash: txHash, signature: signature, sender: senderAddress })
-    });
-
-    if (!response.ok) throw new Error(`Relayer Verification Failed: ${response.statusText}`);
-    const data = await response.json();
-    console.log("[SDK] [Step 6] JWT Received ✅");
-    return data.jwt;
-  }
-
-  async _deliverAction(jwt, destination, content) {
-    console.log("[SDK] [Step 7] Dispatching payload to Gateway...");
-    
-    const response = await fetch(`${RELAYER_URL}/dispatch`, {
-        method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${jwt}`
-        },
-        body: JSON.stringify({ destination: destination, content: content })
-    });
-
-    if (!response.ok) {
-        const err = await response.json();
-        throw new Error(`Gateway Delivery Failed: ${err.detail || response.statusText}`);
-    }
-    
-    const ack = await response.json();
-    console.log("[SDK] [Step 9] Acknowledgment Received 📡");
-    return ack;
-  }
-
-  async _executePayment(serviceName, destination, content) {
-    await this._init();
+async function main() {
+    console.clear();
+    console.log("==========================================");
+    console.log("      SYSCALL SDK - CLI TESTER            ");
+    console.log("==========================================\n");
 
     try {
-      const contractAddress = await this._resolveContractAddress();
-      console.log(`[SDK] Resolved SyscallContract at: ${contractAddress}`);
-      const syscallContract = new ethers.Contract(contractAddress, SYSCALL_ABI, this.signer);
-      
-      const unitPriceWei = await syscallContract.services(serviceName);
-      if (unitPriceWei === 0n) throw new Error(`Service '${serviceName}' inactive.`);
+        let privateKey = process.env.PRIVATE_KEY;
+        if (!privateKey) {
+            privateKey = await askQuestion("Enter Wallet Private Key: ");
+        } else {
+            console.log("✅ Using Private Key from .env");
+        }
 
-      // Calculate Length
-      const encoder = new TextEncoder();
-      const messageBytes = encoder.encode(content).length;
-      
-      // Calculate Total Cost
-      const totalCost = unitPriceWei * BigInt(messageBytes);
+        console.log("[1/4] Initializing SDK...");
+        const syscall = new Syscall(privateKey);
 
-      console.log(`[SDK] Service: ${serviceName.toUpperCase()} | Length: ${messageBytes} chars | Cost: ${ethers.formatEther(totalCost)} ETH`);
-      console.log("[SDK] Sending transaction to MegaETH...");
-      
-      // Pass length to the contract
-      const tx = await syscallContract.pay(serviceName, messageBytes, { value: totalCost });
-      
-      console.log(`[SDK] TX Sent: ${tx.hash}`);
-      const receipt = await tx.wait();
-      console.log(`[SDK] Confirmed in block: ${receipt.blockNumber}`);
+        console.log("\n[2/4] Preparing Transaction Details:");
+        console.log("Select Service:");
+        console.log("   1. Send SMS");
+        console.log("   2. Send Email");
+        const choice = await askQuestion("   > Choice (1 or 2): ");
 
-      const jwt = await this._notifyRelayer(receipt.hash);
-      const ackData = await this._deliverAction(jwt, destination, content);
+        let result;
+        
+        if (choice === '1') {
+            let phoneNumber = process.env.TEST_PHONE || await askQuestion("Target Phone Number: ");
+            let message = process.env.TEST_MESSAGE || await askQuestion("Message Content: ");
+            
+            console.log(`✅ Using Phone: ${phoneNumber}`);
+            console.log(`✅ Using Message: "${message}"`);
+            
+            console.log("\n[3/4] Processing Payment & Action...");
+            console.log("------------------------------------------");
+            result = await syscall.sendSMS(phoneNumber, message);
 
-      return {
-          txHash: receipt.hash,
-          relayerStatus: ackData.status,
-          jwt: jwt,
-          gatewayResult: ackData,
-          consumptionTx: ackData.meta.consumptionTx 
-      };
+        } else if (choice === '2') {
+            let email = process.env.TEST_EMAIL || await askQuestion("Target Email Address: ");
+            let message = process.env.TEST_MESSAGE || await askQuestion("Message Content: ");
+            
+            console.log(`✅ Using Email: ${email}`);
+            console.log(`✅ Using Message: "${message}"`);
+
+            console.log("\n[3/4] Processing Payment & Action...");
+            console.log("------------------------------------------");
+            result = await syscall.sendEmail(email, message);
+
+        } else {
+            throw new Error("Invalid choice.");
+        }
+
+        // --- Success Output ---
+        console.log("------------------------------------------");
+        console.log("\n[4/4] SUCCESS! 🚀");
+        console.log(`Transaction Hash: ${result.txHash}`);
+        console.log(`Relayer Status:   ${result.relayerStatus}`);
+        
+        console.log("\n🔐 [SECURITY TOKEN RECEIVED]");
+        // --- DISPLAYING JWT ---
+        console.log(result.jwt); 
+        console.log("------------------------------------------");
+        
+        console.log("\n📡 [GATEWAY RESPONSE]");
+        console.log(JSON.stringify(result.gatewayResult, null, 2));
 
     } catch (error) {
-      console.error(`[SDK] Error executing ${serviceName}:`, error);
-      throw error;
+        console.error("\n❌ ERROR:", error.message || error);
+    } finally {
+        rl.close();
+        process.exit(0);
     }
-  }
-
-  async sendSMS(phoneNumber, messageContent) {
-    return await this._executePayment("sms", phoneNumber, messageContent);
-  }
-
-  async sendEmail(emailAddress, messageContent) {
-    return await this._executePayment("email", emailAddress, messageContent);
-  }
 }
 
-module.exports = Syscall;
+main();
