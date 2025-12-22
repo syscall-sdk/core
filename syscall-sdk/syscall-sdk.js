@@ -1,12 +1,17 @@
 const { ethers } = require("ethers");
 
 // --- Configuration ---
-const RPC_URL = "https://topstrike-megaeth-ws-proxy-100.fly.dev/rpc";
-const REGISTRY_ADDRESS = "0x68704764C29886ed623b0f3CD30516Bf0643f390";
+const RPC_URL = process.env.RPC_URL || "https://topstrike-megaeth-ws-proxy-100.fly.dev/rpc";
+const REGISTRY_ADDRESS = process.env.REGISTRY_ADDRESS || "0x68704764C29886ed623b0f3CD30516Bf0643f390";
 const RELAYER_URL = process.env.RELAYER_URL || "http://localhost:8080"; 
 
 const REGISTRY_ABI = ["function syscallContract() view returns (address)"];
-const SYSCALL_ABI = ["function services(string name) view returns (uint256)", "function pay(string name) payable"];
+
+// MODIFIED ABI: pay accepts (string name, uint256 quantity)
+const SYSCALL_ABI = [
+    "function services(string name) view returns (uint256)", 
+    "function pay(string name, uint256 quantity) payable" 
+];
 
 class Syscall {
   constructor(signerSource) {
@@ -35,7 +40,6 @@ class Syscall {
     return address;
   }
 
-  // [Step 4 -> 6] Retrieve JWT
   async _notifyRelayer(txHash) {
     console.log("[SDK] [Step 4] Requesting Authorization from Relayer...");
     const signature = await this.signer.signMessage(txHash);
@@ -53,7 +57,6 @@ class Syscall {
     return data.jwt;
   }
 
-  // [Step 7] Send JWT + Data -> [Step 9] Receive Ack
   async _deliverAction(jwt, destination, content) {
     console.log("[SDK] [Step 7] Dispatching payload to Gateway...");
     
@@ -66,9 +69,11 @@ class Syscall {
         body: JSON.stringify({ destination: destination, content: content })
     });
 
-    if (!response.ok) throw new Error(`Gateway Delivery Failed: ${response.statusText}`);
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(`Gateway Delivery Failed: ${err.detail || response.statusText}`);
+    }
     
-    // [Step 9] Relayer sends back the Ack (Proof of off-chain execution + Proof of on-chain consumption)
     const ack = await response.json();
     console.log("[SDK] [Step 9] Acknowledgment Received 📡");
     return ack;
@@ -78,39 +83,39 @@ class Syscall {
     await this._init();
 
     try {
-      // 1-3. Blockchain Payment
       const contractAddress = await this._resolveContractAddress();
       console.log(`[SDK] Resolved SyscallContract at: ${contractAddress}`);
       const syscallContract = new ethers.Contract(contractAddress, SYSCALL_ABI, this.signer);
       
-      const basePriceWei = await syscallContract.services(serviceName);
-      if (basePriceWei === 0n) throw new Error(`Service '${serviceName}' inactive.`);
+      const unitPriceWei = await syscallContract.services(serviceName);
+      if (unitPriceWei === 0n) throw new Error(`Service '${serviceName}' inactive.`);
 
+      // Calculate Length
       const encoder = new TextEncoder();
       const messageBytes = encoder.encode(content).length;
-      const totalCost = basePriceWei * BigInt(messageBytes);
+      
+      // Calculate Total Cost
+      const totalCost = unitPriceWei * BigInt(messageBytes);
 
-      console.log(`[SDK] Service: ${serviceName.toUpperCase()} | Cost: ${ethers.formatEther(totalCost)} ETH`);
+      console.log(`[SDK] Service: ${serviceName.toUpperCase()} | Length: ${messageBytes} chars | Cost: ${ethers.formatEther(totalCost)} ETH`);
       console.log("[SDK] Sending transaction to MegaETH...");
       
-      const tx = await syscallContract.pay(serviceName, { value: totalCost });
+      // Pass length to the contract
+      const tx = await syscallContract.pay(serviceName, messageBytes, { value: totalCost });
+      
       console.log(`[SDK] TX Sent: ${tx.hash}`);
       const receipt = await tx.wait();
       console.log(`[SDK] Confirmed in block: ${receipt.blockNumber}`);
 
-      // 4-6. Obtaining JWT
       const jwt = await this._notifyRelayer(receipt.hash);
-
-      // 7-9. Execution & Acknowledgement
       const ackData = await this._deliverAction(jwt, destination, content);
 
-      // [Step 10] Return Ack to the caller (User Interface)
       return {
           txHash: receipt.hash,
           relayerStatus: ackData.status,
           jwt: jwt,
           gatewayResult: ackData,
-          consumptionTx: ackData.meta.consumptionTx // The proof that it was consumed
+          consumptionTx: ackData.meta.consumptionTx 
       };
 
     } catch (error) {
@@ -120,12 +125,10 @@ class Syscall {
   }
 
   async sendSMS(phoneNumber, messageContent) {
-    console.log(`[SDK] Initializing SMS to ${phoneNumber}...`);
     return await this._executePayment("sms", phoneNumber, messageContent);
   }
 
   async sendEmail(emailAddress, messageContent) {
-    console.log(`[SDK] Initializing Email to ${emailAddress}...`);
     return await this._executePayment("email", emailAddress, messageContent);
   }
 }
