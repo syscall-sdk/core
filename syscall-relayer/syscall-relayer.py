@@ -172,7 +172,7 @@ def mark_consumed_on_chain(payment_id: int):
         
         tx = contract_function.build_transaction(tx_params)
         signed_tx = w3.eth.account.sign_transaction(tx, OWNER_PRIVATE_KEY)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         
         receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
         
@@ -282,3 +282,4 @@ async def dispatch_action(payload: DispatchPayload, authorization: str = Header(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=PORT)
+
