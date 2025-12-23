@@ -1,62 +1,18 @@
 services:
-  # --- 1. SYSCALL-TRAEFIK (Gateway / Reverse Proxy) ---
-  syscall-traefik:
-    image: traefik:v2.11
-    container_name: syscall-traefik
-    restart: always
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      # SECURITY: Do not expose containers by default. We must add "traefik.enable=true" manually.
-      - "--providers.docker.exposedbydefault=false"
-      
-      # Entrypoints Configuration (HTTP & HTTPS)
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
-      - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.websecure.http.tls.certresolver=myresolver"
-      
-      # SSL Configuration (Let's Encrypt - HTTP Challenge)
-      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.myresolver.acme.email=syscall-sdk@proton.me"
-      - "--certificatesresolvers.myresolver.acme.storage=/acme.json"
-    
-    ports:
-      - "80:80"
-      - "443:443"
-    
-    volumes:
-      # Access to Docker Daemon (read-only)
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      # SSL Certificates persistence (Host path relative to compose.yaml)
-      - "./syscall-traefik/acme.json:/acme.json"
-    
-    networks:
-      - services-net
-
-  # --- 2. SYSCALL-RELAYER (Backend API) ---
+  # --- 1. SYSCALL-RELAYER (Backend API) ---
   syscall-relayer:
     build: 
       context: ./syscall-relayer
     container_name: syscall-relayer
     restart: always
+    ports:
+      - "8080:8080"
     volumes:
       - ./syscall-relayer/logs:/app/logs
     networks:
       - services-net
     env_file:
       - .env
-    labels:
-      # Enable Traefik for this specific container
-      - "traefik.enable=true"
-      # ROUTING RULE: Define the exact domain name
-      - "traefik.http.routers.relayer.rule=Host(`syscall-relayer.syscall-sdk.com`)"
-      - "traefik.http.routers.relayer.entrypoints=websecure"
-      - "traefik.http.routers.relayer.tls.certresolver=myresolver"
-      # PORT MAPPING: Tell Traefik to send traffic to internal port 8080
-      - "traefik.http.services.relayer.loadbalancer.server.port=8080"
 
 networks:
   services-net:
