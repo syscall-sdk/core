@@ -42,12 +42,20 @@ logger.addHandler(stream_handler)
 
 app = FastAPI(title="Syscall Relayer (Centralized Config)", version="1.1.0")
 
-# --- CORS MIDDLEWARE (Crucial for SDK in Browser) ---
+# --- CORS MIDDLEWARE (Mode SDK Public Universel) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace "*" with your frontend domain
+    # Au lieu de "*", on utilise une REGEX qui dit "tout ce qui commence par http ou https"
+    # FastAPI va renvoyer l'origine exacte du client dans le header, ce qui satisfait le navigateur.
+    allow_origin_regex="https?://.*", 
+    
+    # Cela permet au JWT et aux headers d'autorisation de passer
     allow_credentials=True,
+    
+    # On autorise toutes les méthodes (POST, GET, OPTIONS...)
     allow_methods=["*"],
+    
+    # On autorise tous les headers (notamment "Authorization" pour le Bearer token)
     allow_headers=["*"],
 )
 
