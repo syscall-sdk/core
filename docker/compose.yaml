@@ -1,7 +1,7 @@
 services:
   # --- 1. SYSCALL-RELAYER (Backend API) ---
   syscall-relayer:
-    build: 
+    build:
       context: ./syscall-relayer
     container_name: syscall-relayer
     restart: always
@@ -13,6 +13,17 @@ services:
       - services-net
     env_file:
       - .env
+
+# --- 2. SYSCALL-WEBSITE ---
+  syscall-website:
+    build:
+      context: ./syscall-website
+    container_name: syscall-website
+    restart: always
+    ports:
+      - "8090:8090"
+    networks:
+      - services-net
 
 networks:
   services-net:
