@@ -1,1 +1,50 @@
-<h1>Site Web sur le Port 8090 (Host & Container)</h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Syscall SDK | Web Tester</title>
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js"></script>
+
+    <script src="syscall-sdk.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>SYSCALL SDK <span class="badge">WEB CLI</span></h1>
+            <p>Blockchain-to-Real-World Bridge</p>
+        </header>
+
+        <div class="card">
+            <div class="form-group">
+                <label>1. Select Service</label>
+                <select id="serviceSelector">
+                    <option value="sms">Send SMS</option>
+                    <option value="email">Send Email</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label id="targetLabel">2. Target Phone Number</label>
+                <input type="text" id="targetInput" placeholder="+33612345678">
+            </div>
+
+            <div class="form-group">
+                <label>3. Message Content</label>
+                <textarea id="messageInput" rows="3" placeholder="Hello from the Blockchain!"></textarea>
+            </div>
+
+            <button id="executeBtn">PAY & EXECUTE</button>
+        </div>
+
+        <div class="terminal" id="terminal">
+            <div class="log-line">System ready... Waiting for input.</div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
