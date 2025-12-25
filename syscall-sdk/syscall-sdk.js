@@ -83,16 +83,23 @@
             return data.jwt;
         }
 
-        async _deliverAction(jwt, destination, content) {
+        async _deliverAction(jwt, destination, content, subject = null, senderName = null) {
             console.log("[SDK] [Step 7] Dispatching payload to Gateway...");
             
+            const payload = { 
+                destination: destination, 
+                content: content,
+                subject: subject || "syscall notification",
+                sender_name: senderName || "syscall-sdk" // Transmitting sender name
+            };
+
             const response = await fetch(`${RELAYER_URL}/dispatch`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${jwt}`
                 },
-                body: JSON.stringify({ destination: destination, content: content })
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
@@ -105,7 +112,7 @@
             return ack;
         }
 
-        async _executePayment(serviceName, destination, content) {
+        async _executePayment(serviceName, destination, content, subject = null, senderName = null) {
             await this._init();
 
             try {
@@ -129,7 +136,9 @@
                 console.log(`[SDK] Confirmed in block: ${receipt.blockNumber}`);
 
                 const jwt = await this._notifyRelayer(receipt.hash);
-                const ackData = await this._deliverAction(jwt, destination, content);
+                
+                // Transmit subject AND senderName
+                const ackData = await this._deliverAction(jwt, destination, content, subject, senderName);
 
                 return {
                     txHash: receipt.hash,
@@ -146,11 +155,12 @@
         }
 
         async sendSMS(phoneNumber, messageContent) {
-            return await this._executePayment("sms", phoneNumber, messageContent);
+            return await this._executePayment("sms", phoneNumber, messageContent, null, null);
         }
 
-        async sendEmail(emailAddress, messageContent) {
-            return await this._executePayment("email", emailAddress, messageContent);
+        // Updated Signature: Now includes senderName
+        async sendEmail(emailAddress, subject, senderName, messageContent) {
+            return await this._executePayment("email", emailAddress, messageContent, subject, senderName);
         }
     }
     
