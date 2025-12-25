@@ -1,4 +1,8 @@
 PRIVATE_KEY=PrivateKeyHere
-TEST_PHONE=+33652326925
-TEST_EMAIL=test@test.fr
-TEST_MESSAGE=Message from syscall-sdk. Nice to meet you :-)
+
+TEST_PHONE=PhoneHere
+
+TEST_EMAIL=EmailHere
+TEST_SENDER_NAME=syscall-sdk
+TEST_SUBJECT=syscall notification
+TEST_MESSAGE=test message from syscall-sdk
