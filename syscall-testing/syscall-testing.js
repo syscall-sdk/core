@@ -1,5 +1,5 @@
 const readline = require('readline');
-const Syscall = require('../syscall-sdk/syscall-sdk'); 
+const Syscall = require('./syscall-sdk'); 
 require('dotenv').config(); 
 
 const rl = readline.createInterface({
@@ -46,14 +46,20 @@ async function main() {
 
         } else if (choice === '2') {
             let email = process.env.TEST_EMAIL || await askQuestion("Target Email Address: ");
+            let subject = process.env.TEST_SUBJECT || await askQuestion("Email Subject: ");
+            let senderName = process.env.TEST_SENDER_NAME || await askQuestion("Sender Name (Display Name): "); 
             let message = process.env.TEST_MESSAGE || await askQuestion("Message Content: ");
             
             console.log(`✅ Using Email: ${email}`);
+            console.log(`✅ Using Subject: "${subject}"`);
+            console.log(`✅ Using Sender: "${senderName}"`);
             console.log(`✅ Using Message: "${message}"`);
 
             console.log("\n[3/4] Processing Payment & Action...");
             console.log("------------------------------------------");
-            result = await syscall.sendEmail(email, message);
+            
+            // Passing the custom sender name to the SDK
+            result = await syscall.sendEmail(email, subject, senderName, message);
 
         } else {
             throw new Error("Invalid choice.");
@@ -66,7 +72,6 @@ async function main() {
         console.log(`Relayer Status:   ${result.relayerStatus}`);
         
         console.log("\n🔐 [SECURITY TOKEN RECEIVED]");
-        // --- DISPLAYING JWT ---
         console.log(result.jwt); 
         console.log("------------------------------------------");
         
