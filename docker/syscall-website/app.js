@@ -1,4 +1,4 @@
-// app.js - Verbose Edition
+// app.js - Verbose Edition (Updated for Subject & Sender Name)
 
 // --- 1. DOM Elements ---
 const btn = document.getElementById('executeBtn');
@@ -7,6 +7,11 @@ const targetInput = document.getElementById('targetInput');
 const targetLabel = document.getElementById('targetLabel');
 const messageInput = document.getElementById('messageInput');
 const terminal = document.getElementById('terminal');
+
+// NEW ELEMENTS
+const emailFields = document.getElementById('emailFields');
+const senderNameInput = document.getElementById('senderNameInput');
+const subjectInput = document.getElementById('subjectInput');
 
 // --- 2. TERMINAL & LOGGER SYSTEM ---
 
@@ -31,22 +36,19 @@ function logToTerminal(msg, type = 'info') {
 }
 
 // 💥 THE MAGIC TRICK: Intercept console.log from the SDK
-// This allows us to see what happens INSIDE syscall-sdk.js without modifying it.
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
 
 console.log = function(...args) {
-    originalConsoleLog.apply(console, args); // Keep working in browser dev tools
+    originalConsoleLog.apply(console, args); 
 
-    // Convert arguments to a single string
     const text = args.map(arg => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg))).join(' ');
 
-    // Filter and format SDK messages
     if (text.includes("[SDK]")) {
         if (text.includes("Error")) logToTerminal(text, 'error');
-        else if (text.includes("TX Sent")) logToTerminal("⛓️ " + text, 'warn'); // Highlight TX
+        else if (text.includes("TX Sent")) logToTerminal("⛓️ " + text, 'warn');
         else if (text.includes("Confirmed")) logToTerminal("✅ " + text, 'success');
-        else logToTerminal(text, 'data'); // Standard SDK logs
+        else logToTerminal(text, 'data');
     }
 };
 
@@ -58,15 +60,26 @@ console.error = function(...args) {
 
 
 // --- 3. UI HELPER ---
-serviceSelector.addEventListener('change', (e) => {
-    if (e.target.value === 'sms') {
+function updateUIState() {
+    const service = serviceSelector.value;
+    
+    if (service === 'sms') {
         targetLabel.innerText = "2. Target Phone Number";
         targetInput.placeholder = "+33612345678";
+        // Hide Email fields for SMS
+        emailFields.style.display = 'none';
     } else {
         targetLabel.innerText = "2. Target Email Address";
         targetInput.placeholder = "alice@example.com";
+        // Show Email fields
+        emailFields.style.display = 'block';
     }
-});
+}
+
+// Init UI on load
+updateUIState();
+
+serviceSelector.addEventListener('change', updateUIState);
 
 // --- 4. MAIN EXECUTION LOGIC ---
 btn.addEventListener('click', async () => {
@@ -75,8 +88,12 @@ btn.addEventListener('click', async () => {
     const destination = targetInput.value;
     const content = messageInput.value;
 
+    // Get new values
+    const subject = subjectInput.value || "syscall notification"; // Default if empty
+    const senderName = senderNameInput.value || "syscall-sdk"; // Default if empty
+
     if (!destination || !content) {
-        logToTerminal("Input Error: Please fill in all fields.", "error");
+        logToTerminal("Input Error: Please fill in destination and content.", "error");
         return;
     }
 
@@ -90,7 +107,7 @@ btn.addEventListener('click', async () => {
         // Lock UI
         btn.disabled = true;
         btn.innerText = "⏳ EXECUTING...";
-        terminal.innerHTML = ""; // Clear previous logs
+        terminal.innerHTML = ""; 
 
         logToTerminal("--- STARTING NEW PROCESS ---", "info");
 
@@ -100,6 +117,11 @@ btn.addEventListener('click', async () => {
 
         logToTerminal(`   Service: ${service.toUpperCase()}`, "info");
         logToTerminal(`   Target:  ${destination}`, "info");
+        
+        if(service === 'email') {
+            logToTerminal(`   Subject: "${subject}"`, "info");
+            logToTerminal(`   Sender:  "${senderName}"`, "info");
+        }
 
         // D. Execution Flow
         logToTerminal("2️⃣ Preparing Blockchain Transaction...", "info");
@@ -107,13 +129,14 @@ btn.addEventListener('click', async () => {
 
         let result;
 
-        // We wrap the call to catch the exact moment the promise resolves
         const startTime = Date.now();
 
         if (service === 'sms') {
+            // SMS signature remains: (phone, content)
             result = await syscall.sendSMS(destination, content);
         } else {
-            result = await syscall.sendEmail(destination, content);
+            // Email signature updated: (email, subject, senderName, content)
+            result = await syscall.sendEmail(destination, subject, senderName, content);
         }
 
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -130,12 +153,11 @@ btn.addEventListener('click', async () => {
         logToTerminal(`   ${result.jwt.substring(0, 50)}...`, "data");
 
         logToTerminal("📡 GATEWAY RESPONSE:", "info");
-        // Pretty print JSON response
         const jsonResponse = JSON.stringify(result.gatewayResult, null, 2);
         logToTerminal(jsonResponse, "data");
 
     } catch (error) {
-        console.error(error); // This will trigger our intercepted console.error
+        console.error(error); 
         logToTerminal("Process Aborted due to error.", "error");
     } finally {
         btn.disabled = false;
