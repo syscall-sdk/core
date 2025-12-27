@@ -146,7 +146,7 @@ don't get stuck in user-space<br>
 
 ```
 
-### [ [ > 👾 join the discord (dev) < ] ](https://discord.gg/x835STNQsP)<br>
+### [ [ > 👾 join the discord (dev) < ] ](https://discord.gg/p3nBwNKUe7)<br>
 > direct access to founders and early-adopters<br><br>
 
 ### [ [ > 📜 read the whitepaper < ] ](https://github.com/syscall-sdk/core/blob/main/docs/whitepaper.md)<br>
