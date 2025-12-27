@@ -146,10 +146,13 @@ don't get stuck in user-space<br>
 
 ```
 
-### [ [ > 👾 join the discord (dev) < ] ](https://discord.gg/p3nBwNKUe7)<br>
+### [ [ > ⚡ website (dev) < ] ](https://www.syscall-sdk.com/)<br>
+> direct access to first release<br><br>
+
+### [ [ > ⚡ join the discord (dev) < ] ](https://discord.gg/p3nBwNKUe7)<br>
 > direct access to founders and early-adopters<br><br>
 
-### [ [ > 📜 read the whitepaper < ] ](https://github.com/syscall-sdk/core/blob/main/docs/whitepaper.md)<br>
+### [ [ > ⚡ read the whitepaper < ] ](https://github.com/syscall-sdk/core/blob/main/docs/whitepaper.md)<br>
 > detailed technical vision & tokenomics<br><br>
 
 ### [ [ > ⚡ support the project < ] ](https://github.com/syscall-sdk/core/blob/main/docs/funding.md)<br>
