@@ -30,5 +30,5 @@ the details regarding:
 
 this file will be updated as soon as the economic paper is validated<br>
 
-### [ [ > 👾 join the discord (dev) < ] ](https://discord.gg/x835STNQsP)<br>
+### [ [ > 👾 join the discord (dev) < ] ](https://discord.gg/p3nBwNKUe7)<br>
 > direct access to founders and early-adopters<br><br>
