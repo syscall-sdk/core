@@ -1,5 +1,5 @@
 services:
-  # --- 1. SYSCALL-RELAYER (Backend API) ---
+  # --- 1. SYSCALL-RELAYER ---
   syscall-relayer:
     build:
       context: ./syscall-relayer
@@ -14,7 +14,7 @@ services:
     env_file:
       - .env
 
-# --- 2. SYSCALL-WEBSITE ---
+  # --- 2. SYSCALL-WEBSITE ---
   syscall-website:
     build:
       context: ./syscall-website
@@ -22,6 +22,36 @@ services:
     restart: always
     ports:
       - "8090:8090"
+    networks:
+      - services-net
+
+  # --- 3. SYSCALL-SMTP ---
+  syscall-smtp:
+    image: mailserver/docker-mailserver:latest
+    container_name: syscall-smtp
+    hostname: mail
+    domainname: syscall-sdk.com  # <--- CHANGED
+    restart: always
+    ports:
+      - "25:25"
+      - "587:587"
+      - "465:465"
+    volumes:
+      - ./syscall-smtp/mail-data:/var/mail
+      - ./syscall-smtp/mail-state:/var/mail-state
+      - ./syscall-smtp/mail-logs:/var/log/mail
+      - ./syscall-smtp/config:/tmp/docker-mailserver
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - ENABLE_SPAMASSASSIN=0
+      - ENABLE_CLAMAV=0
+      - ENABLE_FAIL2BAN=1
+      - ENABLE_POSTGREY=0
+      - ONE_DIR=1
+      - DMS_DEBUG=0
+      - PERMIT_DOCKER=connected-networks
+    cap_add:
+      - NET_ADMIN
     networks:
       - services-net
 
