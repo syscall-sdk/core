@@ -1,4 +1,4 @@
-// app.js - Verbose Edition (Updated for Subject & Sender Name)
+// app.js - Syscall SDK Interface Logic
 
 // --- 1. DOM Elements ---
 const btn = document.getElementById('executeBtn');
@@ -8,47 +8,44 @@ const targetLabel = document.getElementById('targetLabel');
 const messageInput = document.getElementById('messageInput');
 const terminal = document.getElementById('terminal');
 
-// NEW ELEMENTS
+// Extended Fields
 const emailFields = document.getElementById('emailFields');
 const senderNameInput = document.getElementById('senderNameInput');
 const subjectInput = document.getElementById('subjectInput');
 
 // --- 2. TERMINAL & LOGGER SYSTEM ---
-
 /**
- * Adds a line to the visual terminal.
- * @param {string} msg - The text to display
- * @param {string} type - Class name: 'info', 'success', 'error', 'data', 'warn'
+ * Renders logs to the custom HTML terminal
  */
 function logToTerminal(msg, type = 'info') {
     const div = document.createElement('div');
     div.classList.add('log-line', `log-${type}`);
 
-    // Add Timestamp
     const now = new Date();
     const timeString = now.toLocaleTimeString('en-US', { hour12: false }) + "." + String(now.getMilliseconds()).padStart(3, '0');
 
-    // formatting
-    div.innerHTML = `<span style="opacity:0.5">[${timeString}]</span> ${msg}`;
+    div.innerHTML = `<span style="opacity:0.4; font-size:0.8em">[${timeString}]</span> ${msg}`;
 
     terminal.appendChild(div);
-    terminal.scrollTop = terminal.scrollHeight; // Auto-scroll to bottom
+    terminal.scrollTop = terminal.scrollHeight;
 }
 
-// 💥 THE MAGIC TRICK: Intercept console.log from the SDK
+// 💥 THE MAGIC TRICK: Intercept SDK Console Output
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
 
 console.log = function(...args) {
     originalConsoleLog.apply(console, args); 
-
     const text = args.map(arg => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg))).join(' ');
 
-    if (text.includes("[SDK]")) {
+    if (text.includes("[SDK]") || text.includes("Syscall")) {
         if (text.includes("Error")) logToTerminal(text, 'error');
-        else if (text.includes("TX Sent")) logToTerminal("⛓️ " + text, 'warn');
+        else if (text.includes("TX Sent")) logToTerminal("⚡ " + text, 'warn');
         else if (text.includes("Confirmed")) logToTerminal("✅ " + text, 'success');
         else logToTerminal(text, 'data');
+    } else {
+        // Log other standard messages delicately
+        // logToTerminal(text, 'info'); 
     }
 };
 
@@ -58,110 +55,100 @@ console.error = function(...args) {
     logToTerminal("❌ " + text, 'error');
 };
 
-
-// --- 3. UI HELPER ---
+// --- 3. UI STATE MANAGEMENT ---
 function updateUIState() {
     const service = serviceSelector.value;
     
     if (service === 'sms') {
-        targetLabel.innerText = "2. Target Phone Number";
+        targetLabel.innerText = "2. TARGET PHONE NUMBER";
         targetInput.placeholder = "+33612345678";
-        // Hide Email fields for SMS
         emailFields.style.display = 'none';
     } else {
-        targetLabel.innerText = "2. Target Email Address";
+        targetLabel.innerText = "2. TARGET EMAIL ADDRESS";
         targetInput.placeholder = "alice@example.com";
-        // Show Email fields
         emailFields.style.display = 'block';
     }
 }
 
-// Init UI on load
+// Initialization
 updateUIState();
-
 serviceSelector.addEventListener('change', updateUIState);
 
-// --- 4. MAIN EXECUTION LOGIC ---
+// --- 4. EXECUTION FLOW ---
 btn.addEventListener('click', async () => {
     // A. Validation
     const service = serviceSelector.value;
     const destination = targetInput.value;
     const content = messageInput.value;
-
-    // Get new values
-    const subject = subjectInput.value || "syscall notification"; // Default if empty
-    const senderName = senderNameInput.value || "syscall-sdk"; // Default if empty
+    const subject = subjectInput.value || "syscall notification";
+    const senderName = senderNameInput.value || "syscall-sdk";
 
     if (!destination || !content) {
-        logToTerminal("Input Error: Please fill in destination and content.", "error");
+        logToTerminal("INPUT_ERR: Destination and Content are required.", "error");
         return;
     }
 
-    // B. Check Wallet
+    // B. Wallet Check
     if (!window.ethereum) {
-        logToTerminal("System Error: MetaMask not found.", "error");
+        logToTerminal("CRITICAL: MetaMask (Web3 Provider) not found.", "error");
         return;
     }
 
     try {
         // Lock UI
         btn.disabled = true;
-        btn.innerText = "⏳ EXECUTING...";
+        btn.innerHTML = "⏳ PROCESSING CHAIN REQUEST...";
         terminal.innerHTML = ""; 
 
-        logToTerminal("--- STARTING NEW PROCESS ---", "info");
+        logToTerminal("--- INITIATING SYSCALL PROTOCOL ---", "system");
 
-        // C. Init SDK
-        logToTerminal("1️⃣ Initializing SDK with Browser Wallet...", "info");
+        // C. SDK Initialization
+        logToTerminal("1️⃣ Injecting Provider...", "info");
+        // NOTE: Assumes Syscall class is globally available via syscall-sdk.js
         const syscall = new Syscall(window.ethereum);
 
-        logToTerminal(`   Service: ${service.toUpperCase()}`, "info");
+        logToTerminal(`   Mode:    ${service.toUpperCase()}`, "info");
         logToTerminal(`   Target:  ${destination}`, "info");
         
         if(service === 'email') {
-            logToTerminal(`   Subject: "${subject}"`, "info");
-            logToTerminal(`   Sender:  "${senderName}"`, "info");
+            logToTerminal(`   Header:  "${subject}"`, "info");
+            logToTerminal(`   From:    "${senderName}"`, "info");
         }
 
-        // D. Execution Flow
-        logToTerminal("2️⃣ Preparing Blockchain Transaction...", "info");
-        logToTerminal("   👉 PLEASE CHECK METAMASK TO CONFIRM PAYMENT", "warn");
-
+        // D. Transaction
+        logToTerminal("2️⃣ Awaiting User Signature...", "warn");
+        
+        const startTime = Date.now();
         let result;
 
-        const startTime = Date.now();
-
         if (service === 'sms') {
-            // SMS signature remains: (phone, content)
             result = await syscall.sendSMS(destination, content);
         } else {
-            // Email signature updated: (email, subject, senderName, content)
             result = await syscall.sendEmail(destination, subject, senderName, content);
         }
 
         const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-        // E. Result Display
-        logToTerminal("----------------------------------", "info");
-        logToTerminal(`🎉 PROCESS COMPLETED in ${duration}s`, "success");
+        // E. Result Handling
+        logToTerminal("----------------------------------", "system");
+        logToTerminal(`🎉 EXECUTION SUCCESS (${duration}s)`, "success");
 
-        logToTerminal("📝 TRANSACTION DETAILS:", "info");
-        logToTerminal(`   Hash: ${result.txHash}`, "data");
-        logToTerminal(`   Status: ${result.relayerStatus}`, "data");
+        logToTerminal(">> ON-CHAIN PROOF:", "info");
+        logToTerminal(`   TX: ${result.txHash}`, "data");
+        
+        logToTerminal(">> OFF-CHAIN RELAY:", "info");
+        logToTerminal(`   JWT: ${result.jwt.substring(0, 20)}...[REDACTED]`, "data");
 
-        logToTerminal("🔐 SECURITY PROOF (JWT):", "info");
-        logToTerminal(`   ${result.jwt.substring(0, 50)}...`, "data");
-
-        logToTerminal("📡 GATEWAY RESPONSE:", "info");
-        const jsonResponse = JSON.stringify(result.gatewayResult, null, 2);
-        logToTerminal(jsonResponse, "data");
+        logToTerminal(">> GATEWAY RESPONSE:", "info");
+        logToTerminal(JSON.stringify(result.gatewayResult, null, 2), "data");
 
     } catch (error) {
         console.error(error); 
-        logToTerminal("Process Aborted due to error.", "error");
+        logToTerminal("EXECUTION_ABORTED: See console for stack trace.", "error");
     } finally {
         btn.disabled = false;
-        btn.innerText = "PAY & EXECUTE";
-        logToTerminal("--- READY FOR NEXT COMMAND ---", "info");
+        btn.innerHTML = `<span class="btn-text">INITIALIZE TRANSACTION</span>`;
+        logToTerminal("--- SYSTEM READY ---", "system");
     }
 });
+
