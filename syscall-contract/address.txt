@@ -4,4 +4,4 @@ syscall-contract : https://www.megaexplorer.xyz/address/0xF8e0EDFdc8D72B83E09C6d
 
 mainnet frontier :
 syscall-wallet : https://megaeth.blockscout.com/address/0x5D7AD1fBcf15d9C69D31F431e4930ca0c96666B4
-syscall-contract : waiting whitelisting (hurry up mega team :-) ...
+syscall-contract : https://megaeth.blockscout.com/address/0xA8Bdb75FaeE825c24A3DCEE870cd415773B31a8f
