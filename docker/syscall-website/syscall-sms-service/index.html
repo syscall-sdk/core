@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Syscall SMS | Trustless SMS Relay</title>
+    
+    <link rel="icon" type="image/jpeg" href="favicon.jpg">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js"></script>
+    <script src="syscall-sms-sdk.js"></script>
+</head>
+<body>
+
+    <div class="main-layout">
+        
+        <header>
+            <div class="brand">
+                <img src="logo.jpg" alt="Logo" style="width: 32px; height: 32px; border-radius: 4px; margin-right: 10px;">
+                <span>SYSCALL <span class="highlight">SMS</span></span>
+                <span class="version">v2.3.0</span>
+            </div>
+            <a href="../index.html" class="nav-link">&lt; BACK TO HUB</a>
+        </header>
+
+        <div class="network-notice">
+            <span style="font-size: 1.2em;">⚡</span>
+            <span><strong>LIVE ON MegaETH:</strong> Ensure your wallet is connected to the correct chain and <b>whitelisted</b></span>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <span class="ascii-icon">i</span> SERVICE OVERVIEW
+            </div>
+            <div class="grid-2-col">
+                <div>
+                    <h3 class="section-title">TRUSTLESS SMS RELAY</h3>
+                    <p class="text-content">
+                        The Syscall SMS service allows smart contracts to trigger text messages purely via blockchain transactions. 
+                        It uses a Commit-Reveal scheme to ensure the content is cryptographically linked to the payment before dispatch.
+                    </p>
+                </div>
+                <div>
+                    <div class="price-box">
+                        <div class="price-label">LIVE ORACLE PRICE</div>
+                        <div class="price-value" id="priceDisplay">LOADING...</div>
+                        <div class="price-sub">Gas Optimized for L2</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-container">
+            <div class="card control-panel">
+                <div class="card-header">
+                    <span class="blink">_</span> LIVE TESTER
+                </div>
+
+                <div class="form-group">
+                    <label>1. TARGET PHONE NUMBER</label>
+                    <input type="text" id="targetInput" placeholder="+1234567890" autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label>2. MESSAGE CONTENT</label>
+                    <textarea id="messageInput" rows="4" placeholder="> Write your SMS content here..."></textarea>
+                </div>
+
+                <button id="executeBtn" class="cyber-btn">
+                    <span class="btn-text">PAY & SEND SMS</span>
+                    <span class="btn-glitch"></span>
+                </button>
+            </div>
+
+            <div class="card terminal-wrapper">
+                <div class="card-header">
+                    <span>EXECUTION LOGS</span>
+                    <div class="status-indicator"></div>
+                </div>
+                <div class="terminal" id="terminal">
+                    <div class="log-line log-system">Syscall SMS Module loaded...</div>
+                    <div class="log-line log-system">Waiting for user input...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 2rem;">
+            <div class="card-header">
+                <span class="ascii-icon">#</span> FRONTEND INTEGRATION (BROWSER)
+            </div>
+            <div class="code-section">
+                <p class="text-content">
+                    1. Download <a href="syscall-sms-sdk.js" download class="cyber-link" style="font-size:0.9em;">syscall-sms-sdk.js</a> and place it in your project.<br>
+                    2. Import Ethers.js v6 and the SDK in your HTML head.<br>
+                    3. Initialize and use the global `Syscall` class.
+                </p>
+                
+                <div class="code-block">
+<span class="code-comment">&lt;!-- 1. Include Libraries (HTML) --&gt;</span>
+&lt;script src="https://cdnjs.../ethers.umd.min.js"&gt;&lt;/script&gt;
+&lt;script src="./syscall-sms-sdk.js"&gt;&lt;/script&gt;
+
+&lt;script&gt;
+  async function sendSMS() {
+    <span class="code-comment">// 2. Initialize with window.ethereum</span>
+    const syscall = new Syscall(window.ethereum);
+
+    <span class="code-comment">// 3. Trigger Action (Prompts MetaMask)</span>
+    const receipt = await syscall.sendSMS(
+        "+15550199888",            <span class="code-comment">// Phone Number</span>
+        "Your wallet is verified." <span class="code-comment">// Content</span>
+    );
+
+    console.log("Proof TX:", receipt.txHash);
+  }
+&lt;/script&gt;
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 2rem;">
+            <div class="card-header">
+                <span class="ascii-icon">#</span> BACKEND INTEGRATION (NODE.JS)
+            </div>
+            <div class="code-section">
+                <p class="text-content">
+                    1. Install dependencies: <code>npm install ethers dotenv</code><br>
+                    2. Download <a href="syscall-sms-sdk.js" download class="cyber-link" style="font-size:0.9em;">syscall-sms-sdk.js</a> to your project root.<br>
+                    3. Import the local file and initialize with your wallet's Private Key.
+                </p>
+                
+                <div class="code-block">
+<span class="code-comment">// 1. Imports & Setup</span>
+require('dotenv').config();
+const Syscall = require('./syscall-sms-sdk'); <span class="code-comment">// Local Import</span>
+
+<span class="code-comment">// 2. Initialization (Server-Side)</span>
+const syscall = new Syscall(process.env.PRIVATE_KEY);
+
+<span class="code-comment">// 3. Usage Example</span>
+async function notifyAdmin() {
+    const tx = await syscall.sendSMS(
+        "+15550199888",
+        "Server Alert: Pod-42 Critical Error."
+    );
+    console.log("SMS Sent:", tx.txHash);
+}
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 2rem;">
+            <div class="card-header">
+                <span class="ascii-icon">@</span> COMMUNITY & DOCS
+            </div>
+            
+            <div class="links-container">
+                <a href="https://x.com/syscall_sdk" target="_blank" class="cyber-link">> X (TWITTER)</a>
+                <a href="https://discord.gg/p3nBwNKUe7" target="_blank" class="cyber-link">> DISCORD</a>
+                <a href="https://github.com/syscall-sdk/core" target="_blank" class="cyber-link">> GITHUB</a>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
