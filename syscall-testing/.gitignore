@@ -1,8 +1,0 @@
-PRIVATE_KEY=PrivateKeyHere
-
-TEST_PHONE=PhoneHere
-
-TEST_EMAIL=EmailHere
-TEST_SENDER_NAME=syscall-sdk
-TEST_SUBJECT=syscall notification
-TEST_MESSAGE=test message from syscall-sdk
