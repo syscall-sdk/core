@@ -1,7 +1,7 @@
-testnet timothy :
-syscall-wallet :  https://www.megaexplorer.xyz/address/0x5D7AD1fBcf15d9C69D31F431e4930ca0c96666B4
-syscall-contract : https://www.megaexplorer.xyz/address/0xF8e0EDFdc8D72B83E09C6d2765afE47e0a604972
-
-mainnet frontier :
+mainnet frontier v12 :
 syscall-wallet : https://megaeth.blockscout.com/address/0x5D7AD1fBcf15d9C69D31F431e4930ca0c96666B4
 syscall-contract : https://megaeth.blockscout.com/address/0xA8Bdb75FaeE825c24A3DCEE870cd415773B31a8f
+
+mainnet frontier v20 :
+syscall-wallet : https://megaeth.blockscout.com/address/0x5D7AD1fBcf15d9C69D31F431e4930ca0c96666B4
+syscall-contract : https://megaeth.blockscout.com/address/0xc980133c42914ae2d240f3dafe1295fc4f10ecb2
