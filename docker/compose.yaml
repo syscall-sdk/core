@@ -4,38 +4,68 @@ services:
     build:
       context: ./syscall-relayer
     container_name: syscall-relayer
-    restart: always
     ports:
       - "8080:8080"
+    restart: unless-stopped
     volumes:
       - ./syscall-relayer/logs:/app/logs
     networks:
       - services-net
     env_file:
-      - .env
+      - ./syscall-relayer/.env
 
-  # --- 2. SYSCALL-WEBSITE ---
+  # --- 2. SYSCALL-EMAIL-RELAYER ---
+  syscall-email-relayer:
+    build:
+      context: ./syscall-email-relayer
+    container_name: syscall-email-relayer
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    volumes:
+      - ./syscall-email-relayer/logs:/app/logs
+    networks:
+      - services-net
+    env_file:
+      - ./syscall-email-relayer/.env
+
+  # --- 3. SYSCALL-SMS-RELAYER ---
+  syscall-sms-relayer:
+    build:
+      context: ./syscall-sms-relayer
+    container_name: syscall-sms-relayer
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+    volumes:
+      - ./syscall-sms-relayer/logs:/app/logs
+    networks:
+      - services-net
+    env_file:
+      - ./syscall-sms-relayer/.env
+
+  # --- 4. SYSCALL-WEBSITE ---
   syscall-website:
     build:
       context: ./syscall-website
     container_name: syscall-website
-    restart: always
     ports:
       - "8090:8090"
+    restart: unless-stopped
     networks:
       - services-net
 
-  # --- 3. SYSCALL-SMTP ---
+  # --- 5. SYSCALL-SMTP ---
   syscall-smtp:
     image: mailserver/docker-mailserver:latest
     container_name: syscall-smtp
     hostname: mail
     domainname: syscall-sdk.com  # <--- CHANGED
-    restart: always
     ports:
       - "25:25"
       - "587:587"
       - "465:465"
+    restart: unless-stopped
     volumes:
       - ./syscall-smtp/mail-data:/var/mail
       - ./syscall-smtp/mail-state:/var/mail-state
