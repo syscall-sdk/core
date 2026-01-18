@@ -9,6 +9,8 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from web3 import Web3
 from web3.exceptions import TransactionNotFound
@@ -19,19 +21,18 @@ from eth_utils import keccak
 #              CONFIGURATION
 # ==========================================
 
-PORT = int(os.getenv("SYSCALL-EMAIL-RELAYER-PORT"))
+PORT = int(os.getenv("SYSCALL-EMAIL-RELAYER-PORT", 8000))
 RPC_URL = os.getenv("SYSCALL-EMAIL-RELAYER-RPC_URL")
 OWNER_PRIVATE_KEY = os.getenv("SYSCALL-EMAIL-RELAYER-OWNER_PRIVATE_KEY")
 SYSCALL_CONTRACT_ADDRESS = os.getenv("SYSCALL-EMAIL-RELAYER-SYSCALL_CONTRACT_ADDRESS")
 
 # EMAIL Config
 SMTP_HOST = os.getenv("SYSCALL-EMAIL-RELAYER-SMTP_HOST") 
-SMTP_PORT = int(os.getenv("SYSCALL-EMAIL-RELAYER-SMTP_PORT"))
+SMTP_PORT = int(os.getenv("SYSCALL-EMAIL-RELAYER-SMTP_PORT", 587))
 SMTP_USER = os.getenv("SYSCALL-EMAIL-RELAYER-SMTP_USER")                 
 SMTP_PASSWORD = os.getenv("SYSCALL-EMAIL-RELAYER-SMTP_PASSWORD")
 SMTP_FROM_EMAIL = os.getenv("SYSCALL-EMAIL-RELAYER-SMTP_FROM_EMAIL")
 
-# --- UPDATED ABI (With commitment) ---
 CONTRACT_ABI = '[{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"paymentId","type":"uint256"},{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"string","name":"name","type":"string"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"quantity","type":"uint256"},{"indexed":false,"internalType":"bytes32","name":"commitment","type":"bytes32"},{"indexed":false,"internalType":"uint256","name":"timestamp","type":"uint256"}],"name":"ActionPaid","type":"event"}, {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"isConsumed","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}, {"inputs":[{"internalType":"uint256","name":"paymentId","type":"uint256"}],"name":"consumePayment","outputs":[],"stateMutability":"nonpayable","type":"function"}]'
 
 # --- Logger ---
@@ -43,7 +44,7 @@ stream_handler = logging.StreamHandler(sys.stdout)
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
-app = FastAPI(title="Syscall Relayer (Email Only)", version="2.1.0")
+app = FastAPI(title="Syscall Relayer (Email Only)", version="2.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,10 +54,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# STATIC FILES CONFIGURATION
+# Ensure 'static' directory exists (critical for Docker mount consistency)
+if not os.path.exists("static"):
+    os.makedirs("static")
+
+# Mount the static directory to serve CSS/JS/Images at /static path
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # --- Models ---
 class DispatchPayload(BaseModel):
     tx_hash: str
-    secret: str         # The Key (Reveal)
+    secret: str
     destination: str
     content: str
     subject: str = "Syscall Notification"
@@ -103,18 +112,15 @@ def verify_and_consume(tx_hash: str, secret: str):
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         if not w3.is_connected(): raise Exception("RPC Connection Failed")
 
-        # 1. Get Transaction Receipt
         try:
             tx_receipt = w3.eth.get_transaction_receipt(tx_hash)
         except TransactionNotFound: return None
 
         if tx_receipt['status'] != 1: return None
 
-        # FIX: Force Checksum Address here
         checksum_address = Web3.to_checksum_address(SYSCALL_CONTRACT_ADDRESS)
         contract = w3.eth.contract(address=checksum_address, abi=CONTRACT_ABI)
         
-        # 2. Extract Event Data
         events = contract.events.ActionPaid().process_receipt(tx_receipt)
         if not events: return None
         
@@ -122,10 +128,8 @@ def verify_and_consume(tx_hash: str, secret: str):
         payment_id = args['paymentId']
         service = args['name']
         quantity = args['quantity']
-        on_chain_commitment = args['commitment'] # bytes32
+        on_chain_commitment = args['commitment']
 
-        # 3. VERIFY COMMITMENT (The Magic)
-        # Re-create hash from the received secret
         secret_bytes = bytes.fromhex(secret.replace("0x", ""))
         computed_hash = keccak(secret_bytes)
 
@@ -133,7 +137,6 @@ def verify_and_consume(tx_hash: str, secret: str):
             logger.warning(f"SECURITY ALERT: Hash Mismatch! ID: {payment_id}")
             return None
 
-        # 4. Anti-Replay Check
         if contract.functions.isConsumed(payment_id).call():
             logger.warning(f"Replay Attempt: Payment {payment_id} already consumed.")
             return None
@@ -154,7 +157,6 @@ def mark_consumed_on_chain(payment_id: int):
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         account = Account.from_key(OWNER_PRIVATE_KEY)
         
-        # FIX: Force Checksum Address here too
         checksum_address = Web3.to_checksum_address(SYSCALL_CONTRACT_ADDRESS)
         contract = w3.eth.contract(address=checksum_address, abi=CONTRACT_ABI)
         
@@ -180,9 +182,14 @@ def mark_consumed_on_chain(payment_id: int):
 #                ENDPOINTS
 # ==========================================
 
+# SERVE INDEX.HTML AT ROOT
+@app.get("/")
+async def serve_frontend():
+    # Returns the index.html from the static folder
+    return FileResponse("static/index.html")
+
 @app.get("/config")
 def get_config():
-    # FIX: Return safe address
     safe_addr = Web3.to_checksum_address(SYSCALL_CONTRACT_ADDRESS) if SYSCALL_CONTRACT_ADDRESS else None
     return {"rpc_url": RPC_URL, "contract_address": safe_addr}
 
@@ -190,7 +197,6 @@ def get_config():
 async def dispatch_action(payload: DispatchPayload):
     logger.info(f"Received Dispatch Request for TX: {payload.tx_hash}")
 
-    # 1. Verify Payment & Secret
     valid_payment = verify_and_consume(payload.tx_hash, payload.secret)
     
     if not valid_payment:
@@ -200,15 +206,12 @@ async def dispatch_action(payload: DispatchPayload):
     service_type = valid_payment['service']
     allowed_qty = valid_payment['quantity']
 
-    # 2. Check Constraints
     content_len = len(payload.content.encode('utf-8'))
     if content_len > allowed_qty:
         raise HTTPException(status_code=402, detail=f"Content too long. Paid for {allowed_qty}")
 
-    # 3. Execute Off-Chain
     provider_sid = "unknown"
     try:
-        # SMS Logic Removed
         if service_type == "email":
             provider_sid = execute_email_delivery(
                 payload.destination, payload.subject, payload.sender_name, payload.content
@@ -218,7 +221,6 @@ async def dispatch_action(payload: DispatchPayload):
     except Exception as e:
          raise HTTPException(status_code=502, detail=str(e))
 
-    # 4. Mark Consumed
     tx = mark_consumed_on_chain(payment_id)
     
     return {
