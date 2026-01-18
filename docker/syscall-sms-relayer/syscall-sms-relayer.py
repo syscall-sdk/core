@@ -4,6 +4,8 @@ import os
 import time
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles  # [NEW]
+from fastapi.responses import FileResponse   # [NEW]
 from pydantic import BaseModel
 from web3 import Web3
 from web3.exceptions import TransactionNotFound
@@ -16,7 +18,7 @@ from twilio.base.exceptions import TwilioRestException
 #              CONFIGURATION
 # ==========================================
 
-PORT = int(os.getenv("SYSCALL-SMS-RELAYER-PORT"))
+PORT = int(os.getenv("SYSCALL-SMS-RELAYER-PORT", 8000))
 RPC_URL = os.getenv("SYSCALL-SMS-RELAYER-RPC_URL")
 OWNER_PRIVATE_KEY = os.getenv("SYSCALL-SMS-RELAYER-OWNER_PRIVATE_KEY")
 SYSCALL_CONTRACT_ADDRESS = os.getenv("SYSCALL-SMS-RELAYER-SYSCALL_CONTRACT_ADDRESS")
@@ -26,7 +28,6 @@ TWILIO_ACCOUNT_SID = os.getenv("SYSCALL-SMS-RELAYER-TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("SYSCALL-SMS-RELAYER-TWILIO_AUTH_TOKEN")
 TWILIO_FROM_NUMBER = os.getenv("SYSCALL-SMS-RELAYER-TWILIO_FROM_NUMBER")
 
-# --- UPDATED ABI (With commitment) ---
 CONTRACT_ABI = '[{"anonymous":false,"inputs":[{"indexed":true,"internalType":"uint256","name":"paymentId","type":"uint256"},{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"string","name":"name","type":"string"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"quantity","type":"uint256"},{"indexed":false,"internalType":"bytes32","name":"commitment","type":"bytes32"},{"indexed":false,"internalType":"uint256","name":"timestamp","type":"uint256"}],"name":"ActionPaid","type":"event"}, {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"isConsumed","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}, {"inputs":[{"internalType":"uint256","name":"paymentId","type":"uint256"}],"name":"consumePayment","outputs":[],"stateMutability":"nonpayable","type":"function"}]'
 
 # --- Logger ---
@@ -48,14 +49,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# [NEW] STATIC FILES CONFIGURATION
+# Ensure 'static' directory exists inside container
+if not os.path.exists("static"):
+    os.makedirs("static")
+
+# Mount the static directory to serve CSS/JS/Images at /static path
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # --- Models ---
 class DispatchPayload(BaseModel):
     tx_hash: str
     secret: str         
     destination: str
     content: str
-    subject: str = "SMS"     # Optional for SMS
-    sender_name: str = "SDK" # Optional for SMS
+    subject: str = "SMS"     
+    sender_name: str = "SDK" 
 
 # ==========================================
 #           CORE LOGIC (GATEWAY)
@@ -81,18 +90,15 @@ def verify_and_consume(tx_hash: str, secret: str):
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         if not w3.is_connected(): raise Exception("RPC Connection Failed")
 
-        # 1. Get Transaction Receipt
         try:
             tx_receipt = w3.eth.get_transaction_receipt(tx_hash)
         except TransactionNotFound: return None
 
         if tx_receipt['status'] != 1: return None
 
-        # FIX: Force Checksum Address here
         checksum_address = Web3.to_checksum_address(SYSCALL_CONTRACT_ADDRESS)
         contract = w3.eth.contract(address=checksum_address, abi=CONTRACT_ABI)
         
-        # 2. Extract Event Data
         events = contract.events.ActionPaid().process_receipt(tx_receipt)
         if not events: return None
         
@@ -100,10 +106,8 @@ def verify_and_consume(tx_hash: str, secret: str):
         payment_id = args['paymentId']
         service = args['name']
         quantity = args['quantity']
-        on_chain_commitment = args['commitment'] # bytes32
+        on_chain_commitment = args['commitment']
 
-        # 3. VERIFY COMMITMENT (The Magic)
-        # Re-create hash from the received secret
         secret_bytes = bytes.fromhex(secret.replace("0x", ""))
         computed_hash = keccak(secret_bytes)
 
@@ -111,7 +115,6 @@ def verify_and_consume(tx_hash: str, secret: str):
             logger.warning(f"SECURITY ALERT: Hash Mismatch! ID: {payment_id}")
             return None
 
-        # 4. Anti-Replay Check
         if contract.functions.isConsumed(payment_id).call():
             logger.warning(f"Replay Attempt: Payment {payment_id} already consumed.")
             return None
@@ -132,7 +135,6 @@ def mark_consumed_on_chain(payment_id: int):
         w3 = Web3(Web3.HTTPProvider(RPC_URL))
         account = Account.from_key(OWNER_PRIVATE_KEY)
         
-        # FIX: Force Checksum Address here too
         checksum_address = Web3.to_checksum_address(SYSCALL_CONTRACT_ADDRESS)
         contract = w3.eth.contract(address=checksum_address, abi=CONTRACT_ABI)
         
@@ -158,9 +160,13 @@ def mark_consumed_on_chain(payment_id: int):
 #                ENDPOINTS
 # ==========================================
 
+# [NEW] SERVE INDEX.HTML AT ROOT
+@app.get("/")
+async def serve_frontend():
+    return FileResponse("static/index.html")
+
 @app.get("/config")
 def get_config():
-    # FIX: Return safe checksum address
     safe_addr = Web3.to_checksum_address(SYSCALL_CONTRACT_ADDRESS) if SYSCALL_CONTRACT_ADDRESS else None
     return {"rpc_url": RPC_URL, "contract_address": safe_addr}
 
@@ -168,7 +174,6 @@ def get_config():
 async def dispatch_action(payload: DispatchPayload):
     logger.info(f"Received Dispatch Request for TX: {payload.tx_hash}")
 
-    # 1. Verify Payment & Secret
     valid_payment = verify_and_consume(payload.tx_hash, payload.secret)
     
     if not valid_payment:
@@ -178,24 +183,19 @@ async def dispatch_action(payload: DispatchPayload):
     service_type = valid_payment['service']
     allowed_qty = valid_payment['quantity']
 
-    # 2. Check Constraints
     content_len = len(payload.content.encode('utf-8'))
     if content_len > allowed_qty:
         raise HTTPException(status_code=402, detail=f"Content too long. Paid for {allowed_qty}")
 
-    # 3. Execute Off-Chain (SMS)
     provider_sid = "unknown"
     try:
         if service_type == "sms":
-            # Send SMS First
             provider_sid = execute_sms_delivery(payload.destination, payload.content)
         else:
-            raise HTTPException(status_code=400, detail="Unknown Service (Email Disabled)")
+            raise HTTPException(status_code=400, detail="Unknown Service")
     except Exception as e:
-         # If Sending Fails, we DO NOT mark consumed, allowing retry
          raise HTTPException(status_code=502, detail=str(e))
 
-    # 4. Mark Consumed (Only if step 3 succeeded)
     tx = mark_consumed_on_chain(payment_id)
     
     return {
