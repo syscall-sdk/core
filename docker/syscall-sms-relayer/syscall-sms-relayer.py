@@ -2,10 +2,10 @@ import logging
 import sys
 import os
 import time
-from fastapi import FastAPI, Request, HTTPException, Header
+from fastapi import FastAPI, Request, HTTPException, Header, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles  # [NEW]
-from fastapi.responses import FileResponse   # [NEW]
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from web3 import Web3
 from web3.exceptions import TransactionNotFound
@@ -18,12 +18,18 @@ from twilio.base.exceptions import TwilioRestException
 #              CONFIGURATION
 # ==========================================
 
-PORT = int(os.getenv("SYSCALL-SMS-RELAYER-PORT", 8000))
+PORT = int(os.getenv("SYSCALL-SMS-RELAYER-PORT", 8080))
 RPC_URL = os.getenv("SYSCALL-SMS-RELAYER-RPC_URL")
 OWNER_PRIVATE_KEY = os.getenv("SYSCALL-SMS-RELAYER-OWNER_PRIVATE_KEY")
 SYSCALL_CONTRACT_ADDRESS = os.getenv("SYSCALL-SMS-RELAYER-SYSCALL_CONTRACT_ADDRESS")
 
-# Gateways Config (SMS Specific)
+# [STRICT] Chain Configuration
+CHAIN_ID_ENV = os.getenv("SYSCALL-SMS-RELAYER-CHAIN_ID")
+if not CHAIN_ID_ENV:
+    raise ValueError("CRITICAL ERROR: 'SYSCALL-SMS-RELAYER-CHAIN_ID' environment variable is missing.")
+CHAIN_ID = int(CHAIN_ID_ENV)
+
+# Gateways Config
 TWILIO_ACCOUNT_SID = os.getenv("SYSCALL-SMS-RELAYER-TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("SYSCALL-SMS-RELAYER-TWILIO_AUTH_TOKEN")
 TWILIO_FROM_NUMBER = os.getenv("SYSCALL-SMS-RELAYER-TWILIO_FROM_NUMBER")
@@ -39,7 +45,7 @@ stream_handler = logging.StreamHandler(sys.stdout)
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
-app = FastAPI(title="Syscall Relayer (SMS Only)", version="2.3.0")
+app = FastAPI(title="Syscall Relayer (SMS Secure)", version="2.9.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -49,15 +55,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# [NEW] STATIC FILES CONFIGURATION
-# Ensure 'static' directory exists inside container
-if not os.path.exists("static"):
-    os.makedirs("static")
-
-# Mount the static directory to serve CSS/JS/Images at /static path
+if not os.path.exists("static"): os.makedirs("static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# --- Models ---
 class DispatchPayload(BaseModel):
     tx_hash: str
     secret: str         
@@ -67,37 +67,62 @@ class DispatchPayload(BaseModel):
     sender_name: str = "SDK" 
 
 # ==========================================
+#      SECURITY: ANTI-REPLAY CACHE
+# ==========================================
+# [SECURITY] Memory set to track transactions currently being processed.
+# Prevents race conditions where a user sends the same TX multiple times
+# before the "consumePayment" transaction is mined on-chain.
+PROCESSING_CACHE = set()
+
+# ==========================================
+#          GLOBAL CONNECTIONS (SPEED)
+# ==========================================
+# [OPTIMIZATION] Global Web3 initialization to reuse TCP/SSL connections.
+# This removes the 1-2s handshake latency per request.
+try:
+    w3_global = Web3(Web3.HTTPProvider(RPC_URL))
+    if w3_global.is_connected():
+        logger.info(f"✅ Connected to RPC: {RPC_URL}")
+    else:
+        logger.warning(f"⚠️ Failed to connect to RPC: {RPC_URL}")
+except Exception as e:
+    logger.error(f"❌ RPC Connection Error: {e}")
+    w3_global = None
+
+# ==========================================
 #           CORE LOGIC (GATEWAY)
 # ==========================================
 
 def execute_sms_delivery(destination: str, content: str):
-    logger.info(f"   >>> Gateway: SMS to {destination}")
-    if not TWILIO_ACCOUNT_SID: raise Exception("Twilio config missing")
+    logger.info(f"   >>> Gateway: Sending SMS to {destination} (Background)...")
+    if not TWILIO_ACCOUNT_SID: 
+        logger.error("Twilio Config Missing")
+        return
+
     try:
         client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
         msg = client.messages.create(body=content, from_=TWILIO_FROM_NUMBER, to=destination)
+        logger.info(f"   >>> Gateway: SMS Sent Successfully via Twilio (SID: {msg.sid})")
         return msg.sid
     except Exception as e:
         logger.error(f"   !!! Twilio Error: {e}")
-        raise e
 
 # ==========================================
 #        BLOCKCHAIN LOGIC (VERIFIER)
 # ==========================================
 
 def verify_and_consume(tx_hash: str, secret: str):
-    try:
-        w3 = Web3(Web3.HTTPProvider(RPC_URL))
-        if not w3.is_connected(): raise Exception("RPC Connection Failed")
+    if not w3_global: return None # Fail fast if no RPC
 
+    try:
         try:
-            tx_receipt = w3.eth.get_transaction_receipt(tx_hash)
+            tx_receipt = w3_global.eth.get_transaction_receipt(tx_hash)
         except TransactionNotFound: return None
 
         if tx_receipt['status'] != 1: return None
 
         checksum_address = Web3.to_checksum_address(SYSCALL_CONTRACT_ADDRESS)
-        contract = w3.eth.contract(address=checksum_address, abi=CONTRACT_ABI)
+        contract = w3_global.eth.contract(address=checksum_address, abi=CONTRACT_ABI)
         
         events = contract.events.ActionPaid().process_receipt(tx_receipt)
         if not events: return None
@@ -130,27 +155,27 @@ def verify_and_consume(tx_hash: str, secret: str):
         return None
 
 def mark_consumed_on_chain(payment_id: int):
-    if not OWNER_PRIVATE_KEY: return None
+    if not OWNER_PRIVATE_KEY or not w3_global: return None
     try:
-        w3 = Web3(Web3.HTTPProvider(RPC_URL))
         account = Account.from_key(OWNER_PRIVATE_KEY)
         
         checksum_address = Web3.to_checksum_address(SYSCALL_CONTRACT_ADDRESS)
-        contract = w3.eth.contract(address=checksum_address, abi=CONTRACT_ABI)
+        contract = w3_global.eth.contract(address=checksum_address, abi=CONTRACT_ABI)
         
         func = contract.functions.consumePayment(payment_id)
         
         tx_params = {
             'from': account.address,
-            'nonce': w3.eth.get_transaction_count(account.address, 'pending'),
+            'nonce': w3_global.eth.get_transaction_count(account.address, 'pending'),
             'gas': 300000,
-            'gasPrice': w3.eth.gas_price,
-            'chainId': w3.eth.chain_id
+            'gasPrice': w3_global.eth.gas_price,
+            'chainId': w3_global.eth.chain_id
         }
         
-        signed = w3.eth.account.sign_transaction(func.build_transaction(tx_params), OWNER_PRIVATE_KEY)
-        tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        w3.eth.wait_for_transaction_receipt(tx_hash)
+        signed = w3_global.eth.account.sign_transaction(func.build_transaction(tx_params), OWNER_PRIVATE_KEY)
+        tx_hash = w3_global.eth.send_raw_transaction(signed.raw_transaction)
+        
+        logger.info(f"   >>> Chain Write Sent: {tx_hash.hex()}")
         return tx_hash.hex()
     except Exception as e:
         logger.error(f"Chain Write Error: {e}")
@@ -160,7 +185,6 @@ def mark_consumed_on_chain(payment_id: int):
 #                ENDPOINTS
 # ==========================================
 
-# [NEW] SERVE INDEX.HTML AT ROOT
 @app.get("/")
 async def serve_frontend():
     return FileResponse("static/index.html")
@@ -168,45 +192,79 @@ async def serve_frontend():
 @app.get("/config")
 def get_config():
     safe_addr = Web3.to_checksum_address(SYSCALL_CONTRACT_ADDRESS) if SYSCALL_CONTRACT_ADDRESS else None
-    return {"rpc_url": RPC_URL, "contract_address": safe_addr}
+    return {
+        "rpc_url": RPC_URL, 
+        "contract_address": safe_addr,
+        "chain_id": CHAIN_ID 
+    }
 
 @app.post("/dispatch")
-async def dispatch_action(payload: DispatchPayload):
+async def dispatch_action(payload: DispatchPayload, background_tasks: BackgroundTasks):
     logger.info(f"Received Dispatch Request for TX: {payload.tx_hash}")
 
-    valid_payment = verify_and_consume(payload.tx_hash, payload.secret)
-    
-    if not valid_payment:
-        raise HTTPException(status_code=400, detail="Invalid Payment, Bad Secret, or Replay")
+    # [SECURITY] 1. Check Memory Cache (Fastest)
+    if payload.tx_hash in PROCESSING_CACHE:
+        logger.warning(f"⛔ REPLAY BLOCKED: TX {payload.tx_hash} is already processing.")
+        raise HTTPException(status_code=409, detail="Transaction already processing")
 
-    payment_id = valid_payment['paymentId']
-    service_type = valid_payment['service']
-    allowed_qty = valid_payment['quantity']
+    # [SECURITY] 2. Lock Transaction in Memory
+    PROCESSING_CACHE.add(payload.tx_hash)
 
-    content_len = len(payload.content.encode('utf-8'))
-    if content_len > allowed_qty:
-        raise HTTPException(status_code=402, detail=f"Content too long. Paid for {allowed_qty}")
-
-    provider_sid = "unknown"
     try:
-        if service_type == "sms":
-            provider_sid = execute_sms_delivery(payload.destination, payload.content)
-        else:
-            raise HTTPException(status_code=400, detail="Unknown Service")
-    except Exception as e:
-         raise HTTPException(status_code=502, detail=str(e))
+        # 3. Verify on Chain (Fast via Global RPC)
+        valid_payment = verify_and_consume(payload.tx_hash, payload.secret)
+        
+        if not valid_payment:
+            # Unlock if invalid
+            PROCESSING_CACHE.discard(payload.tx_hash) 
+            raise HTTPException(status_code=400, detail="Invalid Payment, Bad Secret, or Replay")
 
-    tx = mark_consumed_on_chain(payment_id)
-    
-    return {
-        "status": "success",
-        "service": service_type,
-        "meta": {
-            "paymentId": payment_id,
-            "consumptionTx": tx,
-            "providerSid": provider_sid
+        payment_id = valid_payment['paymentId']
+        service_type = valid_payment['service']
+        allowed_qty = valid_payment['quantity']
+
+        content_len = len(payload.content.encode('utf-8'))
+        if content_len > allowed_qty:
+            PROCESSING_CACHE.discard(payload.tx_hash)
+            raise HTTPException(status_code=402, detail=f"Content too long. Paid for {allowed_qty}")
+
+        provider_sid = "unknown"
+        try:
+            if service_type == "sms":
+                # 4. Async Delivery
+                background_tasks.add_task(
+                    execute_sms_delivery,
+                    payload.destination, 
+                    payload.content
+                )
+                provider_sid = "queued" 
+            else:
+                PROCESSING_CACHE.discard(payload.tx_hash)
+                raise HTTPException(status_code=400, detail="Unknown Service (Email Disabled)")
+        except Exception as e:
+             PROCESSING_CACHE.discard(payload.tx_hash)
+             raise HTTPException(status_code=502, detail=str(e))
+
+        # 5. Chain Update (Fast via Global RPC)
+        tx = mark_consumed_on_chain(payment_id)
+        
+        # Note: We intentionally DO NOT remove the hash from PROCESSING_CACHE here.
+        # It stays locked in memory until the server restarts or the pod is killed.
+        # This covers the "mining time" window effectively.
+        
+        return {
+            "status": "success",
+            "service": service_type,
+            "meta": {
+                "paymentId": payment_id,
+                "consumptionTx": tx,
+                "providerSid": provider_sid
+            }
         }
-    }
+    except Exception as e:
+        # Safety Unlock in case of unexpected crash
+        PROCESSING_CACHE.discard(payload.tx_hash)
+        raise e
 
 if __name__ == "__main__":
     import uvicorn
