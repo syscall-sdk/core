@@ -1,4 +1,4 @@
-/* SYSCALL-EMAIL-SDK - ELITE EDITION v2.3 (FIXED) */
+/* SYSCALL-EMAIL-SDK - ELITE EDITION v2.7 (Client-Side Turbo) */
 
 (function(global) {
     let ethers;
@@ -53,26 +53,30 @@
                 if (!response.ok) throw new Error("Relayer unavailable");
                 this.config = await response.json();
             } catch (error) {
-                console.error("[SDK] Config Error:", error);
-                this.config = { rpc_url: "https://rpc.ankr.com/eth_sepolia" }; 
+                console.error("[SDK] CRITICAL: Failed to fetch config from Relayer.", error);
+                this.config = null; 
+                throw error; 
             }
         }
 
-        // --- READ-ONLY INIT (Fast, No Wallet Popup) ---
+        // --- READ-ONLY INIT (RPC DIRECT) ---
         async _initProvider() {
             await this._fetchConfig();
             if (this.provider) return;
-
-            if (this.config && this.config.rpc_url) {
-                this.provider = new ethers.JsonRpcProvider(this.config.rpc_url);
-            } else if (this.signerSource && this.signerSource.request) {
-                this.provider = new ethers.BrowserProvider(this.signerSource);
-            } else {
-                this.provider = new ethers.JsonRpcProvider("https://rpc.ankr.com/eth_sepolia");
+            
+            // Strict check: if no config, we cannot proceed
+            if (!this.config || !this.config.rpc_url) {
+                throw new Error("SDK Initialization Failed: Missing Relayer Configuration");
             }
+
+            this.provider = new ethers.JsonRpcProvider(this.config.rpc_url);
+            
+            // [OPTIMISATION 1] Force le SDK à vérifier la blockchain toutes les 50ms
+            // Cela affecte toutes les lectures faites via ce provider
+            this.provider.pollingInterval = 50; 
         }
 
-        // --- WRITE INIT (Wallet Popup) ---
+        // --- WRITE INIT (METAMASK) ---
         async _initSigner() {
             await this._initProvider();
             if (this.signer) return;
@@ -86,9 +90,34 @@
         }
 
         /**
-         * GET SERVICE PRICE
-         * Returns STRING (ex: "0.001") compatible with UI.
+         * [OPTIMISATION 2] _pollReceipt
+         * Remplace tx.wait().
+         * Au lieu d'attendre que MetaMask (lent) nous notifie, on bombarde 
+         * le nœud RPC directement pour savoir si la TX est passée.
          */
+        async _pollReceipt(txHash) {
+            let attempts = 0;
+            const maxAttempts = 400; // ~20 secondes max (400 * 50ms)
+            
+            while (attempts < maxAttempts) {
+                try {
+                    // Appel direct au RPC (très rapide)
+                    const receipt = await this.provider.getTransactionReceipt(txHash);
+                    
+                    if (receipt && receipt.blockNumber) {
+                        return receipt; // Transaction minée !
+                    }
+                } catch (e) {
+                    // Ignorer les erreurs réseau temporaires pendant le polling
+                }
+                
+                // Attendre 50ms avant de réessayer
+                await new Promise(resolve => setTimeout(resolve, 50));
+                attempts++;
+            }
+            throw new Error("Transaction validation timed out (Custom Polling)");
+        }
+
         async getServicePrice(serviceName) {
             try {
                 await this._initProvider(); 
@@ -126,11 +155,15 @@
 
                 console.log(`[SDK] 🔐 Secret Generated: ${secret.substring(0, 10)}...`);
                 
+                // 1. Envoi via MetaMask (Signature User)
                 const tx = await contract.pay(serviceName, messageBytes, commitment, { value: totalCost });
                 this.secrets.save(tx.hash, secret);
                 
                 console.log(`[SDK] TX Sent: ${tx.hash}`);
-                const receipt = await tx.wait();
+                
+                // 2. [ACTIVATE TURBO] On n'utilise PAS await tx.wait() ici.
+                // On utilise notre poller ultra-rapide sur le RPC direct.
+                const receipt = await this._pollReceipt(tx.hash);
 
                 const result = await this._revealAndDispatch(
                     receipt.hash, secret, destination, content, subject, senderName
@@ -141,7 +174,7 @@
                 return {
                     txHash: receipt.hash,
                     status: "success",
-                    secret: secret, // ✅ CRITICAL FIX: Returning secret for UI display
+                    secret: secret,
                     gatewayResult: result
                 };
 
