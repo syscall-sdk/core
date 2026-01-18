@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>syscall-sdk | Reverse Oracle Interface</title>
+    <link rel="icon" type="image/jpeg" href="/static/favicon.jpg">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js"></script>
+    <script src="/static/syscall-sdk.js"></script>
+</head>
+<body>
+
+    <div class="main-layout">
+        <header>
+            <div class="brand">
+                <span class="ascii-icon">>></span> SYSCALL SDK <span class="version">v0.1.0-alpha</span>
+            </div>
+            <p class="tagline">BLOCKCHAIN TO REAL_WORLD BRIDGE</p>
+        </header>
+
+        <div style="background: rgba(255, 196, 0, 0.05); border: 1px solid var(--warn); color: var(--warn); padding: 12px 20px; border-radius: var(--radius); font-family: 'Fira Code', monospace; font-size: 0.8rem; display: flex; align-items: center; gap: 12px; margin-bottom: 0;">
+            <span style="font-size: 1.2em;">⚠️</span>
+            <span><strong>DEMO NOTICE:</strong> This version of syscall-sdk is a demo version only usable on the MegaETH Mainnet with a <strong>whitelisted address</strong>.</span>
+        </div>
+
+        <div class="grid-container">
+            <div class="card control-panel">
+                <div class="card-header">
+                    <span class="blink">_</span> CONFIGURATION
+                </div>
+
+                <div class="form-group">
+                    <label>1. SELECT PROTOCOL</label>
+                    <div class="select-wrapper">
+                        <select id="serviceSelector">
+                            <option value="sms">SMS GATEWAY</option>
+                            <option value="email" selected>SMTP RELAY (EMAIL)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label id="targetLabel">2. TARGET DESTINATION</label>
+                    <input type="text" id="targetInput" placeholder="alice@example.com" autocomplete="off">
+                </div>
+
+                <div id="emailFields">
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label>3. SENDER IDENTITY</label>
+                            <input type="text" id="senderNameInput" placeholder="syscall-sdk">
+                        </div>
+                        <div class="form-group half">
+                            <label>4. SUBJECT LINE</label>
+                            <input type="text" id="subjectInput" placeholder="syscall notification">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>5. PAYLOAD CONTENT</label>
+                    <textarea id="messageInput" rows="4" placeholder="> Enter message to bridge..."></textarea>
+                </div>
+
+                <button id="executeBtn" class="cyber-btn">
+                    <span class="btn-text">INITIALIZE TRANSACTION</span>
+                    <span class="btn-glitch"></span>
+                </button>
+            </div>
+
+            <div class="card terminal-wrapper">
+                <div class="card-header">
+                    <span>EXECUTION LOGS</span>
+                    <div class="status-indicator"></div>
+                </div>
+                <div class="terminal" id="terminal">
+                    <div class="log-line log-system">Syscall Kernel loaded...</div>
+                    <div class="log-line log-system">Waiting for Web3 Injection...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 2rem;">
+            <div class="card-header">
+                <span class="ascii-icon">?</span> THE MANIFESTO
+            </div>
+            
+            <div style="padding: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; font-family: 'Inter', sans-serif; font-size: 0.9rem; opacity: 0.9;">
+                <div>
+                    <h3 style="font-family: 'Fira Code', monospace; margin-bottom: 1rem; color: inherit;">> THE REVERSE ORACLE</h3>
+                    <p style="margin-bottom: 1rem; line-height: 1.6;">
+                        Syscall-SDK is the missing link between blockchain and reality. While traditional oracles import real-world data to the blockchain, <strong>Syscall exports blockchain actions to the real world</strong>.
+                    </p>
+                    <ul style="list-style: none; font-family: 'Fira Code', monospace; padding-left: 0.5rem; border-left: 2px solid rgba(0, 240, 255, 0.2);">
+                        <li>[x] SMTP RELAY (EMAIL)</li>
+                        <li>[x] SMS GATEWAY (GSM)</li>
+                        <li>[ ] TELEGRAM BOTS (ROADMAP)</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h3 style="font-family: 'Fira Code', monospace; margin-bottom: 1rem; color: inherit;">> THE PARADIGM SHIFT</h3>
+                    <div style="margin-bottom: 1rem;">
+                        <div style="display: flex; justify-content: space-between; font-family: 'Fira Code', monospace; font-size: 0.8rem; margin-bottom: 0.25rem;">
+                            <span>TRADITIONAL ORACLE</span>
+                            <span style="opacity: 0.5;">READ-ONLY</span>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.05); padding: 0.5rem; border-radius: 4px;">
+                            "Importing Reality"<br>
+                            Prices/Weather -> Smart Contract
+                        </div>
+                    </div>
+                    <div>
+                        <div style="display: flex; justify-content: space-between; font-family: 'Fira Code', monospace; font-size: 0.8rem; margin-bottom: 0.25rem;">
+                            <span>SYSCALL SDK</span>
+                            <span style="opacity: 0.5; color: var(--primary);">WRITE-ENABLED</span>
+                        </div>
+                        <div style="background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2); padding: 0.5rem; border-radius: 4px;">
+                            "Exporting Actions"<br>
+                            Smart Contract -> Real World Exec
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 2rem;">
+            <div class="card-header">
+                <span class="ascii-icon">#</span> FRONTEND INTEGRATION GUIDE
+            </div>
+
+            <div style="padding: 1.5rem; font-family: 'Inter', sans-serif; font-size: 0.9rem;">
+                
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-family: 'Fira Code', monospace; margin-bottom: 0.8rem; color: inherit; opacity: 0.8;">1. INSTALLATION & PREREQUISITES</h3>
+                    <p style="margin-bottom: 0.8rem; opacity: 0.7;">Include Ethers.js v6 and Syscall SDK in your HTML head:</p>
+                    <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 6px; font-family: 'Fira Code', monospace; font-size: 0.8rem; color: #a5b3ce; border: 1px solid rgba(255,255,255,0.1);">
+                        &lt;script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js"&gt;&lt;/script&gt;<br>
+                        &lt;script src="https://syscall-sdk.com/syscall-sdk.js"&gt;&lt;/script&gt;
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 2rem;">
+                    
+                    <div>
+                        <h3 style="font-family: 'Fira Code', monospace; margin-bottom: 0.8rem; color: inherit; opacity: 0.8;">2. SENDING AN EMAIL</h3>
+                        <p style="margin-bottom: 0.8rem; opacity: 0.7;">Triggers a blockchain transaction signed by the user:</p>
+                        <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 6px; font-family: 'Fira Code', monospace; font-size: 0.75rem; color: #a5b3ce; border: 1px solid rgba(255,255,255,0.1); white-space: pre-wrap;">
+const syscall = new Syscall(window.ethereum);
+
+// Signature: (destination, subject, senderName, content)
+const receipt = await syscall.sendEmail(
+  "alice@example.com",
+  "Governance Alert",
+  "DAO Protocol",
+  "Your proposal #42 has passed."
+);
+
+console.log("TX Hash:", receipt.txHash);</div>
+                    </div>
+
+                    <div>
+                        <h3 style="font-family: 'Fira Code', monospace; margin-bottom: 0.8rem; color: inherit; opacity: 0.8;">3. SENDING AN SMS</h3>
+                        <p style="margin-bottom: 0.8rem; opacity: 0.7;">ETH cost is calculated based on message length:</p>
+                        <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 6px; font-family: 'Fira Code', monospace; font-size: 0.75rem; color: #a5b3ce; border: 1px solid rgba(255,255,255,0.1); white-space: pre-wrap;">
+const syscall = new Syscall(window.ethereum);
+
+// Signature: (phoneNumber, content)
+const receipt = await syscall.sendSMS(
+  "+33612345678",
+  "Security Alert: Login detected."
+);
+
+console.log("SMS Sent! TX:", receipt.txHash);</div>
+                    </div>
+
+                </div>
+
+                <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <h4 style="font-family: 'Fira Code', monospace; font-size: 0.8rem; opacity: 0.6; margin-bottom: 0.5rem;">DEVELOPER NOTES</h4>
+                    <ul style="list-style: none; padding: 0; font-size: 0.85rem; opacity: 0.7; line-height: 1.5;">
+                        <li>• <strong style="color: #fff;">Network:</strong> User must be on the supported chain (configured in Relayer).</li>
+                        <li>• <strong style="color: #fff;">Cost:</strong> The pay() method is payable; ETH is deducted from wallet.</li>
+                        <li>• <strong style="color: #fff;">Async:</strong> Execution waits for 1 block confirmation.</li>
+                    </ul>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 2rem;">
+            <div class="card-header">
+                <span class="ascii-icon">#</span> BACKEND INTEGRATION GUIDE (NODE.JS)
+            </div>
+
+            <div style="padding: 1.5rem; font-family: 'Inter', sans-serif; font-size: 0.9rem;">
+                
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-family: 'Fira Code', monospace; margin-bottom: 0.8rem; color: inherit; opacity: 0.8;">1. SETUP & AUTHENTICATION</h3>
+                    <p style="margin-bottom: 0.8rem; opacity: 0.7;">
+                        1. Install npm dependencies (ethers, dotenv).<br>
+                        2. <strong>Download <code>syscall-sdk.js</code> manually</strong> (same file as frontend) and place it in your root.
+                    </p>
+                    <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 6px; font-family: 'Fira Code', monospace; font-size: 0.8rem; color: #a5b3ce; border: 1px solid rgba(255,255,255,0.1); white-space: pre-wrap;">
+# Terminal
+npm install ethers dotenv
+# Note: Do NOT install syscall-sdk via npm. Download the file directly.</div>
+                    <div style="margin-top: 10px; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 6px; font-family: 'Fira Code', monospace; font-size: 0.75rem; color: #a5b3ce; border: 1px solid rgba(255,255,255,0.1); white-space: pre-wrap;">
+// app.js
+require('dotenv').config();
+// Import the local downloaded file
+const Syscall = require('./syscall-sdk');
+
+// Backend Init requires a Private Key (NOT a provider)
+const syscall = new Syscall(process.env.PRIVATE_KEY);</div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 2rem;">
+                    
+                    <div>
+                        <h3 style="font-family: 'Fira Code', monospace; margin-bottom: 0.8rem; color: inherit; opacity: 0.8;">2. TRIGGERING ALERTS (EMAIL)</h3>
+                        <p style="margin-bottom: 0.8rem; opacity: 0.7;">Ideal for cron jobs or server monitoring:</p>
+                        <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 6px; font-family: 'Fira Code', monospace; font-size: 0.75rem; color: #a5b3ce; border: 1px solid rgba(255,255,255,0.1); white-space: pre-wrap;">
+async function notifyAdmin() {
+  const receipt = await syscall.sendEmail(
+    "admin@syscall-sdk.com",
+    "System Alert: Server Down",
+    "Infrastructure Bot",
+    "Critical error on node #4."
+  );
+  
+  console.log("TX Confirmed:", receipt.txHash);
+}</div>
+                    </div>
+
+                    <div>
+                        <h3 style="font-family: 'Fira Code', monospace; margin-bottom: 0.8rem; color: inherit; opacity: 0.8;">3. SENDING OTP (SMS)</h3>
+                        <p style="margin-bottom: 0.8rem; opacity: 0.7;">Send verification codes directly from Node.js:</p>
+                        <div style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 6px; font-family: 'Fira Code', monospace; font-size: 0.75rem; color: #a5b3ce; border: 1px solid rgba(255,255,255,0.1); white-space: pre-wrap;">
+async function sendOTP() {
+  const receipt = await syscall.sendSMS(
+    "+15550123456",
+    "Your verification code is: 8492"
+  );
+
+  console.log("SMS TX Hash:", receipt.txHash);
+}</div>
+                    </div>
+
+                </div>
+
+                <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <h4 style="font-family: 'Fira Code', monospace; font-size: 0.8rem; opacity: 0.6; margin-bottom: 0.5rem;">BACKEND DEVELOPER NOTES</h4>
+                    <ul style="list-style: none; padding: 0; font-size: 0.85rem; opacity: 0.7; line-height: 1.5;">
+                        <li>• <strong style="color: #fff;">Gas Management:</strong> Backend wallet must hold ETH for Gas + Service Fee.</li>
+                        <li>• <strong style="color: #fff;">Latency:</strong> Dependent on block time (~12s Mainnet). Not for real-time loops.</li>
+                        <li>• <strong style="color: #fff;">Concurrency:</strong> Handle nonces carefully when sending rapid parallel requests.</li>
+                    </ul>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 2rem;">
+            <div class="card-header">
+                <span class="ascii-icon">@</span> LINKS & RESOURCES
+            </div>
+            
+            <div style="padding: 1.5rem; display: flex; flex-wrap: wrap; gap: 2rem; justify-content: center; font-family: 'Fira Code', monospace; font-size: 0.9rem;">
+                <a href="https://x.com/syscall_sdk" target="_blank" style="color: inherit; text-decoration: none; opacity: 0.7; transition: all 0.2s;" onmouseover="this.style.opacity='1'; this.style.color='#00f0ff'" onmouseout="this.style.opacity='0.7'; this.style.color='inherit'">
+                    > X (TWITTER)
+                </a>
+                <a href="https://discord.gg/p3nBwNKUe7" target="_blank" style="color: inherit; text-decoration: none; opacity: 0.7; transition: all 0.2s;" onmouseover="this.style.opacity='1'; this.style.color='#00f0ff'" onmouseout="this.style.opacity='0.7'; this.style.color='inherit'">
+                    > DISCORD
+                </a>
+                <a href="https://github.com/syscall-sdk/core" target="_blank" style="color: inherit; text-decoration: none; opacity: 0.7; transition: all 0.2s;" onmouseover="this.style.opacity='1'; this.style.color='#00f0ff'" onmouseout="this.style.opacity='0.7'; this.style.color='inherit'">
+                    > GITHUB
+                </a>
+                <a href="https://github.com/syscall-sdk/core/blob/main/docs/whitepaper.md" target="_blank" style="color: inherit; text-decoration: none; opacity: 0.7; transition: all 0.2s;" onmouseover="this.style.opacity='1'; this.style.color='#00f0ff'" onmouseout="this.style.opacity='0.7'; this.style.color='inherit'">
+                    > WHITEPAPER
+                </a>
+                <a href="https://github.com/syscall-sdk/core/blob/main/docs/funding.md" target="_blank" style="color: inherit; text-decoration: none; opacity: 0.7; transition: all 0.2s;" onmouseover="this.style.opacity='1'; this.style.color='#00f0ff'" onmouseout="this.style.opacity='0.7'; this.style.color='inherit'">
+                    > FOUNDING
+                </a>
+                <a href="PitchDeck.pdf" target="_blank" style="color: inherit; text-decoration: none; opacity: 0.7; transition: all 0.2s;" onmouseover="this.style.opacity='1'; this.style.color='#00f0ff'" onmouseout="this.style.opacity='0.7'; this.style.color='inherit'">
+                    > PITCH DECK
+                </a>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
