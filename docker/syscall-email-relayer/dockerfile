@@ -11,6 +11,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY syscall-email-relayer.py .
 
+# Copy the static folder containing index.html, css, js
+COPY static ./static
+
 # Create logs directory (for permissions)
 RUN mkdir logs
 
