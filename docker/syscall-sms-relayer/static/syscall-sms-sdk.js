@@ -1,4 +1,4 @@
-/* SYSCALL-SMS-SDK - ELITE EDITION v2.3 */
+/* SYSCALL-SMS-SDK - ELITE EDITION v2.7 (Client-Side Turbo) */
 
 (function(global) {
     let ethers;
@@ -53,26 +53,28 @@
                 if (!response.ok) throw new Error("Relayer unavailable");
                 this.config = await response.json();
             } catch (error) {
-                console.error("[SDK] Config Error:", error);
-                this.config = { rpc_url: "https://rpc.ankr.com/eth_sepolia" }; 
+                console.error("[SDK] CRITICAL: Failed to fetch config from Relayer.", error);
+                this.config = null; 
+                throw error; 
             }
         }
 
-        // --- READ-ONLY INIT (Fast, No Wallet Popup) ---
+        // --- READ-ONLY INIT (RPC DIRECT) ---
         async _initProvider() {
             await this._fetchConfig();
             if (this.provider) return;
-
-            if (this.config && this.config.rpc_url) {
-                this.provider = new ethers.JsonRpcProvider(this.config.rpc_url);
-            } else if (this.signerSource && this.signerSource.request) {
-                this.provider = new ethers.BrowserProvider(this.signerSource);
-            } else {
-                this.provider = new ethers.JsonRpcProvider("https://rpc.ankr.com/eth_sepolia");
+            
+            if (!this.config || !this.config.rpc_url) {
+                throw new Error("SDK Initialization Failed: Missing Relayer Configuration");
             }
+
+            this.provider = new ethers.JsonRpcProvider(this.config.rpc_url);
+            
+            // [OPTIMISATION 1] Force le polling RPC à 50ms (MegaETH Speed)
+            this.provider.pollingInterval = 50; 
         }
 
-        // --- WRITE INIT (Wallet Popup) ---
+        // --- WRITE INIT (METAMASK) ---
         async _initSigner() {
             await this._initProvider();
             if (this.signer) return;
@@ -86,9 +88,29 @@
         }
 
         /**
-         * GET SERVICE PRICE
-         * Returns STRING (ex: "0.001") compatible with UI.
+         * [OPTIMISATION 2] _pollReceipt
+         * Vérification active de la transaction via RPC (Bypass MetaMask wait)
          */
+        async _pollReceipt(txHash) {
+            let attempts = 0;
+            const maxAttempts = 400; // ~20 secondes max
+            
+            while (attempts < maxAttempts) {
+                try {
+                    const receipt = await this.provider.getTransactionReceipt(txHash);
+                    if (receipt && receipt.blockNumber) {
+                        return receipt; // Transaction confirmée !
+                    }
+                } catch (e) {
+                    // Ignore les erreurs réseau transitoires
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 50)); // Check toutes les 50ms
+                attempts++;
+            }
+            throw new Error("Transaction validation timed out (Custom Polling)");
+        }
+
         async getServicePrice(serviceName) {
             try {
                 await this._initProvider(); 
@@ -126,11 +148,14 @@
 
                 console.log(`[SDK] 🔐 Secret Generated: ${secret.substring(0, 10)}...`);
                 
+                // 1. Envoi via MetaMask
                 const tx = await contract.pay(serviceName, messageBytes, commitment, { value: totalCost });
                 this.secrets.save(tx.hash, secret);
                 
                 console.log(`[SDK] TX Sent: ${tx.hash}`);
-                const receipt = await tx.wait();
+                
+                // 2. [ACTIVATE TURBO] Attente active via RPC
+                const receipt = await this._pollReceipt(tx.hash);
 
                 const result = await this._revealAndDispatch(
                     receipt.hash, secret, destination, content, subject, senderName
@@ -141,7 +166,7 @@
                 return {
                     txHash: receipt.hash,
                     status: "success",
-                    secret: secret, // ✅ CRITICAL: Returning secret for UI display
+                    secret: secret,
                     gatewayResult: result
                 };
 
@@ -154,7 +179,7 @@
         async _revealAndDispatch(txHash, secret, destination, content, subject, senderName) {
             const payload = {
                 tx_hash: txHash, secret, destination, content, 
-                // Subject/Sender are kept for protocol compatibility, though unused in SMS
+                // Subject/Sender unused in SMS but kept for consistency
                 subject: subject || "SMS", 
                 sender_name: senderName || "Syscall SDK"
             };
