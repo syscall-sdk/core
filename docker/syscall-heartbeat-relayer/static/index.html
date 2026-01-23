@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Syscall Heartbeat | Automation Factory</title>
+    
+    <link rel="icon" type="image/jpeg" href="/static/favicon.jpg">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js"></script>
+    <script src="/static/syscall-heartbeat-sdk.js"></script>
+    <script src="/static/syscall-heartbeat-app.js" defer></script>
+    
+    <style>
+        .job-item { background: rgba(255,255,255,0.03); padding: 15px; margin-bottom: 10px; border-radius: 4px; border-left: 3px solid var(--primary); font-size: 0.85rem; font-family: 'Fira Code', monospace; }
+        .job-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .job-label { color: var(--text-muted); font-weight: bold; }
+        .job-val { color: var(--text-main); word-break: break-all; text-align: right; margin-left: 10px; }
+        .job-data { color: var(--warn); font-size: 0.75rem; }
+        .search-bar { width: 100%; padding: 10px; background: var(--bg-deep); border: 1px solid var(--border); color: var(--primary); font-family: 'Fira Code', monospace; margin-bottom: 15px; border-radius: 4px; }
+        
+        #jobsListContainer {
+            max-height: 500px; 
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        
+        #jobsListContainer::-webkit-scrollbar { width: 8px; }
+        #jobsListContainer::-webkit-scrollbar-track { background: var(--bg-deep); }
+        #jobsListContainer::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        .job-actions {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed #444;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .btn-mini {
+            padding: 5px 10px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            border: 1px solid transparent;
+            font-family: 'Fira Code', monospace;
+            opacity: 0.8;
+            transition: 0.2s;
+        }
+        .btn-mini:hover { opacity: 1; }
+        .btn-add { background: #1a3320; color: #4caf50; border-color: #2e5c35; }
+        .btn-del { background: #331a1a; color: #f44336; border-color: #5c2e2e; }
+
+        /* Live Feed Terminal Style */
+        #liveFeedContainer {
+            height: 300px;
+            overflow-y: auto;
+            background: #000;
+            border: 1px solid #333;
+            padding: 10px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.8rem;
+            color: #ccc;
+            border-radius: 4px;
+        }
+        .feed-line { margin-bottom: 4px; border-bottom: 1px solid #111; padding-bottom: 2px; }
+        .feed-ts { color: #555; margin-right: 8px; font-size: 0.75rem; }
+        .feed-tag { color: var(--primary); font-weight: bold; }
+        .feed-success { color: #4caf50; }
+        .feed-error { color: #f44336; }
+        .feed-warn { color: #ff9800; }
+    </style>
+</head>
+<body>
+    <div class="main-layout">
+        <header>
+            <div class="brand">
+                <img src="/static/logo.jpg" alt="Logo" style="width: 32px; height: 32px; border-radius: 4px; margin-right: 10px;">
+                <span>SYSCALL <span class="highlight">HEARTBEAT</span></span>
+                <span class="version">v2.1.0</span>
+            </div>
+            <a href="https://syscall-sdk.com" class="nav-link">&lt; BACK TO HUB</a>
+        </header>
+
+        <div class="network-notice">
+            <span style="font-size: 1.2em;">⚡</span>
+            <span><strong>LIVE ON MegaETH:</strong> Whitelist required. Min deposit <strong>0.003 ETH</strong>. Jobs deleted below <strong>0.001 ETH</strong>.</span>
+        </div>
+
+        <div class="card" style="margin-bottom: 2rem;">
+            <div class="card-header">
+                <span class="ascii-icon">?</span> WHAT IS SYSCALL HEARTBEAT?
+            </div>
+            <div class="text-content" style="line-height: 1.6; color: #ccc; font-size: 0.9rem;">
+                <p>
+                    <strong>Syscall Heartbeat</strong> serves as an autonomous "pulse" for the blockchain, solving the fundamental limitation that smart contracts are passive and cannot execute themselves. By default, contracts lie dormant until a user interacts with them; this stack <strong>"gives them life"</strong> by enabling fully automated, recurring execution.
+                </p>
+                <p style="margin-top: 10px;">
+                    Users simply deploy a Job specifying a target contract, a function signature, and a time interval (e.g., every 60 seconds), funded with a gas deposit. The off-chain Relayer then acts as a reliable clock, monitoring the network and triggering the logic exactly when scheduled. This transforms static code into dynamic, self-sustaining agents capable of performing maintenance, updating oracle prices, or managing game loops without any manual human intervention.
+                </p>
+            </div>
+        </div>
+
+        <div class="grid-container">
+            <div class="card control-panel">
+                <div class="card-header"><span class="blink">_</span> JOB CONFIGURATOR</div>
+
+                <div class="form-group">
+                    <label>1. TARGET CONTRACT ADDRESS</label>
+                    <input type="text" id="targetInput" placeholder="0x..." autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label>2A. FUNCTION SIGNATURE</label>
+                    <input type="text" id="funcSigInput" placeholder="executeTask(uint256,address)" autocomplete="off">
+                    <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 5px;">
+                        Example: <code>transfer(address,uint256)</code>. Leave empty for <code>receive()</code>.
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>2B. ARGUMENTS (COMMA SEPARATED)</label>
+                    <input type="text" id="funcArgsInput" placeholder="0x123..., 500" autocomplete="off">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group half">
+                        <label>3. INTERVAL (SECONDS)</label>
+                        <input type="number" id="intervalInput" placeholder="3600" min="1">
+                    </div>
+                    <div class="form-group half">
+                        <label>4. INITIAL CREDIT (ETH)</label>
+                        <input type="number" id="depositInput" placeholder="0.002" step="0.001" value="0.01">
+                    </div>
+                </div>
+
+                <button id="executeBtn" class="cyber-btn">
+                    <span class="btn-text">DEPLOY HEARTBEAT JOB</span>
+                    <span class="btn-glitch"></span>
+                </button>
+            </div>
+
+            <div class="card terminal-wrapper">
+                <div class="card-header">
+                    <span>DEPLOYMENT LOGS</span>
+                    <div class="status-indicator"></div>
+                </div>
+                <div class="terminal" id="terminal">
+                    <div class="log-line log-system">Syscall UI Loaded.</div>
+                    <div class="log-line log-system">Waiting for user input...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 2rem;">
+            <div class="card-header">
+                <span class="ascii-icon">Q</span> JOB EXPLORER
+                <button id="refreshBtn" style="background:none; border:none; color:var(--primary); cursor:pointer; font-family:'Fira Code', monospace;">[REFRESH]</button>
+            </div>
+            
+            <input type="text" id="searchInput" class="search-bar" placeholder="Filter by Job Address or Target Contract...">
+            
+            <div id="jobsListContainer">
+                <div class="text-content" style="text-align:center; padding: 20px;">Loading Jobs...</div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 2rem;">
+            <div class="card-header">
+                <span class="ascii-icon">~</span> LIVE RELAYER FEED
+                <div class="status-indicator" style="background:var(--success);"></div>
+            </div>
+            <div id="liveFeedContainer">
+                <div class="feed-line">Connecting to Relayer Feed...</div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 2rem;">
+            <div class="card-header"><span class="ascii-icon">@</span> CONTRACT INFO</div>
+            <div class="links-container">
+                <span class="text-content">Factory Address: <span class="highlight" id="factoryDisplay">LOADING...</span></span>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 2rem;">
+            <div class="card-header">
+                <span class="ascii-icon">@</span> COMMUNITY & DOCS
+            </div>
+            
+            <div class="links-container">
+                <a href="https://x.com/syscall_sdk" target="_blank" class="cyber-link">> X (TWITTER)</a>
+                <a href="https://discord.gg/p3nBwNKUe7" target="_blank" class="cyber-link">> DISCORD</a>
+                <a href="https://github.com/syscall-sdk/core" target="_blank" class="cyber-link">> GITHUB</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
