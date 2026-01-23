@@ -5,3 +5,12 @@ syscall-contract : https://megaeth.blockscout.com/address/0xA8Bdb75FaeE825c24A3D
 mainnet frontier v20 :
 syscall-wallet : https://megaeth.blockscout.com/address/0x5D7AD1fBcf15d9C69D31F431e4930ca0c96666B4
 syscall-contract : https://megaeth.blockscout.com/address/0xc980133c42914ae2d240f3dafe1295fc4f10ecb2
+
+syscall-heartbeat-job : 0x1b545427d7A02E15F7F3638CE22733Fb39E64e04
+syscall-heartbeat-factory : 0x2C6d8dA095Af76cedC070236C7A8DC2cF8D3d9D8
+
+syscall-helloworld 1 : 0xFcd1250598Da5E060292702d15Ce9E062C330ef7
+syscall-helloworld 2 : 0x0636fB400E11593D2c4EceD766F6806aFc75F9Fe
+syscall-helloworld 3 : 0xBa83f00465eAa07D7338A4bf6Cdd6c26cDA1038C
+syscall-helloworld 4 : 0xbb62C5303DFfe7e7227e45134F29E87750a6C942
+syscall-helloworld 5 : 0x7aC67B2A58FE3b7Cc0834804AF121FAB23F59F2B
