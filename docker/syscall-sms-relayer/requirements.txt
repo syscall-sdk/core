@@ -1,6 +1,6 @@
-fastapi
-uvicorn
-pydantic
-web3
-pyjwt
-twilio
+fastapi==0.109.0
+uvicorn==0.27.0
+pydantic==2.6.0
+web3>=6.0.0,<7.0.0
+pyjwt==2.8.0
+slixmpp==1.8.5
