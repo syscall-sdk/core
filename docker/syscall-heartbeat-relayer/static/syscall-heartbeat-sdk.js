@@ -1,4 +1,4 @@
-/* SYSCALL-HEARTBEAT-SDK v1.9 (Turbo Mode) */
+/* SYSCALL-HEARTBEAT-SDK v1.9 (Turbo Mode + Fee Injection Fix) */
 
 (function(global) {
     let ethers;
@@ -97,6 +97,26 @@
             throw new Error("Transaction validation timed out (Turbo Polling)");
         }
 
+        // --- FIX: FEE INJECTION ---
+        // Fetches fees from OUR fast RPC (Relayer) instead of asking MetaMask (Slow)
+        async _getFastTxOptions(gasLimit) {
+            const options = { gasLimit: BigInt(gasLimit) };
+            try {
+                // Uses the Provider initialized with Relayer RPC (Fast)
+                const feeData = await this.provider.getFeeData();
+                
+                if (feeData.maxFeePerGas != null && feeData.maxPriorityFeePerGas != null) {
+                    options.maxFeePerGas = feeData.maxFeePerGas;
+                    options.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
+                } else if (feeData.gasPrice != null) {
+                    options.gasPrice = feeData.gasPrice;
+                }
+            } catch (e) {
+                console.warn("[SDK] Fee fetch failed, falling back to MetaMask defaults.", e);
+            }
+            return options;
+        }
+
         // --- UTILS ---
         encodeCalldata(signature, argsString) {
             if (!signature || signature.trim() === "") return "0x";
@@ -127,8 +147,12 @@
             const factory = new ethers.Contract(this.config.factory_address, FACTORY_ABI, this.signer);
             const depositWei = ethers.parseEther(depositEth.toString());
 
+            // [FIX] Inject Fast Fees + Hardcoded Gas Limit
+            const overrides = await this._getFastTxOptions(1200000);
+            overrides.value = depositWei;
+
             console.log(`[SDK] Deploying Job... Target: ${target}`);
-            const tx = await factory.createJob(target, calldataHex, intervalSeconds, { value: depositWei });
+            const tx = await factory.createJob(target, calldataHex, intervalSeconds, overrides);
             
             console.log(`[SDK] TX Sent: ${tx.hash}`);
             
@@ -182,7 +206,11 @@
             await this._initSigner();
             console.log(`[SDK] Cancelling Job: ${jobAddress}`);
             const jobContract = new ethers.Contract(jobAddress, JOB_ABI, this.signer);
-            const tx = await jobContract.withdraw();
+            
+            // [FIX] Inject Fast Fees + Hardcoded Gas Limit
+            const overrides = await this._getFastTxOptions(200000);
+            
+            const tx = await jobContract.withdraw(overrides);
             // [TURBO] Fast wait
             return await this._pollReceipt(tx.hash);
         }
@@ -190,10 +218,13 @@
         async topUpJob(jobAddress, amountEth) {
             await this._initSigner();
             console.log(`[SDK] Topping up Job: ${jobAddress}`);
-            const tx = await this.signer.sendTransaction({
-                to: jobAddress,
-                value: ethers.parseEther(amountEth.toString())
-            });
+            
+            // [FIX] Inject Fast Fees + Hardcoded Gas Limit
+            const overrides = await this._getFastTxOptions(100000);
+            overrides.to = jobAddress;
+            overrides.value = ethers.parseEther(amountEth.toString());
+
+            const tx = await this.signer.sendTransaction(overrides);
             // [TURBO] Fast wait
             return await this._pollReceipt(tx.hash);
         }
