@@ -85,7 +85,7 @@
 
         <div class="network-notice">
             <span style="font-size: 1.2em;">⚡</span>
-            <span><strong>LIVE ON MegaETH:</strong> Whitelist required. Min deposit <strong>0.003 ETH</strong>. Jobs deleted below <strong>0.001 ETH</strong>.</span>
+            <span id="noticeText">Loading network status...</span>
         </div>
 
         <div class="card" style="margin-bottom: 2rem;">
@@ -195,6 +195,36 @@
             </div>
         </div>
     </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // 1. Configuration values
+            const minDeposit = 0.003;
+            const deleteThreshold = 0.001;
+            const placeholderValue = 0.002;
+
+            // 2. Create a number formatter based on the user's browser language
+            // passing 'undefined' uses the system's default locale automatically.
+            const formatter = new Intl.NumberFormat(undefined, {
+                minimumFractionDigits: 3,
+                maximumFractionDigits: 3
+            });
+
+            // 3. Generate the dynamic HTML for the notice banner
+            const dynamicHTML = `<strong>LIVE ON MegaETH:</strong> Whitelist required. Min deposit <strong>${formatter.format(minDeposit)} ETH</strong>. Jobs deleted below <strong>${formatter.format(deleteThreshold)} ETH</strong>.`;
+
+            // 4. Inject the generated HTML into the notice span
+            const noticeElement = document.getElementById('noticeText');
+            if (noticeElement) {
+                noticeElement.innerHTML = dynamicHTML;
+            }
+            
+            // 5. Update the input placeholder to match the detected locale
+            const depositInput = document.getElementById('depositInput');
+            if (depositInput) {
+                depositInput.placeholder = formatter.format(placeholderValue);
+            }
+        });
+    </script>
 </body>
 </html>
-
