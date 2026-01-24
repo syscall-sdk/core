@@ -24,10 +24,7 @@ RPC_URL = os.getenv("SYSCALL-SMS-RELAYER-RPC_URL")
 OWNER_PRIVATE_KEY = os.getenv("SYSCALL-SMS-RELAYER-OWNER_PRIVATE_KEY")
 SYSCALL_CONTRACT_ADDRESS = os.getenv("SYSCALL-SMS-RELAYER-SYSCALL_CONTRACT_ADDRESS")
 
-CHAIN_ID_ENV = os.getenv("SYSCALL-SMS-RELAYER-CHAIN_ID")
-if not CHAIN_ID_ENV:
-    raise ValueError("CRITICAL ERROR: 'SYSCALL-SMS-RELAYER-CHAIN_ID' is missing.")
-CHAIN_ID = int(CHAIN_ID_ENV)
+# NOTE: CHAIN_ID supprimé du .env. On le récupère dynamiquement du RPC.
 
 # [JMP.CHAT / XMPP CONFIG]
 JMP_JID = os.getenv("SYSCALL-SMS-RELAYER-JMP_JID")       
@@ -73,17 +70,20 @@ class SyscallXMPP(slixmpp.ClientXMPP):
 # Global Client Placeholder
 xmpp_client = None
 w3_global = None
+REAL_CHAIN_ID = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- STARTUP ---
-    global xmpp_client, w3_global
+    global xmpp_client, w3_global, REAL_CHAIN_ID
     
     # 1. Init Web3
     try:
         w3_global = Web3(Web3.HTTPProvider(RPC_URL))
         if w3_global.is_connected():
+            REAL_CHAIN_ID = w3_global.eth.chain_id
             logger.info(f"✅ Connected to RPC: {RPC_URL}")
+            logger.info(f"🔗 Detected Chain ID: {REAL_CHAIN_ID}")
         else:
             logger.warning(f"⚠️ Failed to connect to RPC")
     except Exception as e:
@@ -108,7 +108,7 @@ async def lifespan(app: FastAPI):
         logger.info("🔌 Disconnecting XMPP...")
         xmpp_client.disconnect()
 
-app = FastAPI(title="Syscall Relayer (JMP XMPP Elite)", version="3.3.3", lifespan=lifespan)
+app = FastAPI(title="Syscall Relayer (JMP XMPP Elite)", version="3.4.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -151,19 +151,13 @@ async def execute_sms_delivery_xmpp(destination: str, content: str):
             return
 
     # [SECURITY CRITICAL] Input Sanitization & Access Control
-    # 1. Strip whitespace
     clean_dest = destination.strip()
     
-    # 2. Strict Phone Number Validation (E.164-like)
-    # Prevents injection of JIDs, emails, or malicious characters.
-    # Allows only +, digits. Min length 7, max 15.
+    # Strict Phone Number Validation (E.164-like)
     if not re.match(r"^\+?[1-9]\d{6,14}$", clean_dest):
         logger.warning(f"⛔ Security Block: Invalid Phone Number format '{clean_dest}'. SMS Rejected.")
         return
 
-    # 3. Force Gateway Suffix (Prevent Open Relay)
-    # This prevents users from routing messages to arbitrary XMPP/Jabber addresses.
-    # We ignore any existing '@' and strictly append the gateway suffix.
     target_jid = f"{clean_dest}@{JMP_GATEWAY_SUFFIX}"
 
     try:
@@ -218,10 +212,10 @@ def mark_consumed_on_chain(payment_id: int):
             'nonce': w3_global.eth.get_transaction_count(account.address, 'pending'),
             'gas': 300000,
             'gasPrice': w3_global.eth.gas_price,
-            'chainId': w3_global.eth.chain_id
+            'chainId': w3_global.eth.chain_id # Déjà dynamique
         }
         signed = w3_global.eth.account.sign_transaction(func.build_transaction(tx_params), OWNER_PRIVATE_KEY)
-        tx_hash = w3_global.eth.send_raw_transaction(signed.raw_transaction)
+        tx_hash = w3_global.eth.send_raw_transaction(signed.rawTransaction) # Correction camelCase
         logger.info(f"   >>> Chain Write Sent: {tx_hash.hex()}")
         return tx_hash.hex()
     except Exception as e:
@@ -239,7 +233,8 @@ async def serve_frontend():
 @app.get("/config")
 def get_config():
     safe_addr = Web3.to_checksum_address(SYSCALL_CONTRACT_ADDRESS) if SYSCALL_CONTRACT_ADDRESS else None
-    return { "rpc_url": RPC_URL, "contract_address": safe_addr, "chain_id": CHAIN_ID }
+    # Renvoie l'ID réel détecté
+    return { "rpc_url": RPC_URL, "contract_address": safe_addr, "chain_id": REAL_CHAIN_ID }
 
 @app.post("/dispatch")
 async def dispatch_action(payload: DispatchPayload, background_tasks: BackgroundTasks):
@@ -248,7 +243,6 @@ async def dispatch_action(payload: DispatchPayload, background_tasks: Background
     if payload.tx_hash in PROCESSING_CACHE:
         raise HTTPException(status_code=409, detail="Transaction already processing")
     
-    # [SECURITY] 1. Pre-computation sanity check (DoS protection)
     if len(payload.content) > MAX_PAYLOAD_SIZE_BYTES:
         logger.warning(f"DoS Blocked: Payload size {len(payload.content)} exceeds limit.")
         raise HTTPException(status_code=413, detail="Payload content too large for SMS.")
@@ -260,7 +254,6 @@ async def dispatch_action(payload: DispatchPayload, background_tasks: Background
         if not valid_payment:
             raise HTTPException(status_code=400, detail="Invalid Payment")
 
-        # [SECURITY] 2. Logic Validation (Pay-for-what-you-use)
         payload_size = len(payload.content.encode('utf-8'))
         paid_quantity = valid_payment['quantity']
 
@@ -268,7 +261,6 @@ async def dispatch_action(payload: DispatchPayload, background_tasks: Background
             logger.warning(f"Validation Failed: Paid {paid_quantity}, sent {payload_size}.")
             raise HTTPException(status_code=402, detail="Content size exceeds paid quantity.")
 
-        # SMS Logic
         if valid_payment['service'] == "sms":
             background_tasks.add_task(execute_sms_delivery_xmpp, payload.destination, payload.content)
         else:
@@ -281,7 +273,6 @@ async def dispatch_action(payload: DispatchPayload, background_tasks: Background
         raise e
         
     finally:
-        # [CRITICAL FIX] Memory Leak Prevention
         PROCESSING_CACHE.discard(payload.tx_hash)
 
 if __name__ == "__main__":
