@@ -1,4 +1,4 @@
-/* SYSCALL-SMS-SDK - ELITE EDITION v2.7 (Client-Side Turbo) */
+/* SYSCALL-SMS-SDK - ELITE EDITION v2.9 (Turbo + Backoffice Fix) */
 
 (function(global) {
     let ethers;
@@ -74,14 +74,16 @@
             this.provider.pollingInterval = 50; 
         }
 
-        // --- WRITE INIT (METAMASK) ---
+        // --- WRITE INIT (METAMASK OR PRIVATE KEY) ---
         async _initSigner() {
             await this._initProvider();
             if (this.signer) return;
 
             if (typeof this.signerSource === 'string') {
+                // Backoffice Mode (Private Key)
                 this.signer = new ethers.Wallet(this.signerSource, this.provider);
             } else {
+                // Frontoffice Mode (MetaMask)
                 const browserProvider = new ethers.BrowserProvider(this.signerSource || window.ethereum);
                 this.signer = await browserProvider.getSigner();
             }
@@ -109,6 +111,23 @@
                 attempts++;
             }
             throw new Error("Transaction validation timed out (Custom Polling)");
+        }
+
+        // --- [FIX] FEE INJECTION ---
+        async _getFastTxOptions(gasLimit) {
+            const options = { gasLimit: BigInt(gasLimit) };
+            try {
+                const feeData = await this.provider.getFeeData();
+                if (feeData.maxFeePerGas != null && feeData.maxPriorityFeePerGas != null) {
+                    options.maxFeePerGas = feeData.maxFeePerGas;
+                    options.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
+                } else if (feeData.gasPrice != null) {
+                    options.gasPrice = feeData.gasPrice;
+                }
+            } catch (e) {
+                console.warn("[SDK] Fee fetch failed, falling back to defaults.", e);
+            }
+            return options;
         }
 
         async getServicePrice(serviceName) {
@@ -148,8 +167,21 @@
 
                 console.log(`[SDK] 🔐 Secret Generated: ${secret.substring(0, 10)}...`);
                 
-                // 1. Envoi via MetaMask
-                const tx = await contract.pay(serviceName, messageBytes, commitment, { value: totalCost });
+                // [FIX] Inject Fast Fees + SAFE GAS LIMIT (1M)
+                const overrides = await this._getFastTxOptions(1000000);
+                overrides.value = totalCost;
+
+                // [FIX BACKOFFICE] 
+                // Si Private Key détectée -> Force Nonce "Latest" pour éviter le crash "pending block not found"
+                if (typeof this.signerSource === 'string') {
+                    const address = await this.signer.getAddress();
+                    const nonce = await this.provider.getTransactionCount(address, "latest");
+                    overrides.nonce = nonce;
+                    console.log(`[SDK] ⚙️ Backoffice Mode: Forced Nonce ${nonce} (latest)`);
+                }
+                
+                // 1. Envoi
+                const tx = await contract.pay(serviceName, messageBytes, commitment, overrides);
                 this.secrets.save(tx.hash, secret);
                 
                 console.log(`[SDK] TX Sent: ${tx.hash}`);
