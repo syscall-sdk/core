@@ -1,3 +1,4 @@
+
 // app.js - Syscall Heartbeat Frontend Logic (Strict Mode)
 // Relies on global SyscallHeartbeat class from SDK
 
