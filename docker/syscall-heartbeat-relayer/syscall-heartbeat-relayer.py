@@ -23,8 +23,9 @@ RPC_URL = os.getenv("SYSCALL_HEARTBEAT_RPC_URL")
 RELAYER_PRIVATE_KEY = os.getenv("SYSCALL_HEARTBEAT_RELAYER_KEY") 
 FACTORY_ADDRESS = os.getenv("SYSCALL_HEARTBEAT_FACTORY_ADDRESS")
 
-# ABIs
-FACTORY_ABI = '[{"inputs":[],"name":"getJobs","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"}]'
+# [CORRECTION] On ajoute solvencyThreshold à l'ABI pour lire la vraie valeur du contrat
+FACTORY_ABI = '[{"inputs":[],"name":"getJobs","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"}, {"inputs":[],"name":"solvencyThreshold","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}]'
+
 JOB_ABI = '[{"inputs":[],"name":"lastRun","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}, {"inputs":[],"name":"interval","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"}, {"inputs":[],"name":"executeTask","outputs":[],"stateMutability":"nonpayable","type":"function"}]'
 
 # --- Logger Setup ---
@@ -65,7 +66,7 @@ REAL_CHAIN_ID = None
 # ==========================================
 
 async def monitor_and_execute_jobs():
-    logger.info("🤖 Keeper Bot Started...")
+    logger.info("🤖 Keeper Bot Started... (Auto-Sync Mode)")
     
     while True:
         try:
@@ -74,12 +75,17 @@ async def monitor_and_execute_jobs():
                 await asyncio.sleep(5)
                 continue
 
-            # 1. Fetch Jobs
+            # 1. Fetch Jobs & SETTINGS
             try:
                 factory = w3.eth.contract(address=Web3.to_checksum_address(FACTORY_ADDRESS), abi=FACTORY_ABI)
                 jobs = factory.functions.getJobs().call()
+                
+                # [CORRECTION] On lit la limite directement depuis la Factory (ex: 0.001)
+                # Comme ça le Python est toujours d'accord avec le Contrat.
+                current_threshold_wei = factory.functions.solvencyThreshold().call()
+                
             except Exception as e:
-                logger.error(f"Failed to fetch jobs: {e}")
+                logger.error(f"Failed to fetch jobs or settings: {e}")
                 await asyncio.sleep(10)
                 continue
 
@@ -89,28 +95,30 @@ async def monitor_and_execute_jobs():
                 try:
                     job_contract = w3.eth.contract(address=job_addr, abi=JOB_ABI)
                     
-                    # 2. Check Conditions (Read-Only)
+                    # 2. Check Conditions
                     last_run = job_contract.functions.lastRun().call()
                     interval = job_contract.functions.interval().call()
                     balance = w3.eth.get_balance(job_addr)
 
                     next_run = last_run + interval
-                    is_solvent = balance >= Web3.to_wei(0.002, 'ether')
+                    
+                    # [CORRECTION] On utilise la valeur lue (0.001) et non plus 0.002 en dur
+                    is_solvent = balance >= current_threshold_wei
 
+                    # NOTE: Si le contrat doit se supprimer, il le fera lors de la dernière exécution 
+                    # autorisée juste avant de passer sous le seuil.
+                    
                     if current_timestamp >= next_run and is_solvent:
                         logger.info(f"⚡ Attempting Job: {job_addr} (Interval: {interval}s)")
                         
                         tx_func = job_contract.functions.executeTask()
                         
-                        # 3. Build Transaction (EIP-1559 Aggressive Strategy)
+                        # 3. Build Transaction
                         try:
                             latest_block = w3.eth.get_block('latest')
                             base_fee = latest_block['baseFeePerGas']
                             
-                            # Priority Fee (Tip) - Increase if network is congested
                             priority_fee = w3.to_wei(2.5, 'gwei') 
-                            
-                            # Max Fee = (Base Fee * 2) + Tip
                             max_fee = (base_fee * 2) + priority_fee
 
                             tx_params = {
@@ -119,32 +127,27 @@ async def monitor_and_execute_jobs():
                                 'chainId': REAL_CHAIN_ID,
                                 'maxFeePerGas': max_fee,
                                 'maxPriorityFeePerGas': priority_fee,
-                                'type': 2 # Force EIP-1559
+                                'type': 2 
                             }
 
-                            # Simulation
                             gas_est = tx_func.estimate_gas(tx_params)
-                            tx_params['gas'] = int(gas_est * 1.5) # +50% Safety Buffer
+                            tx_params['gas'] = int(gas_est * 1.5) 
 
-                            # Sign
                             signed_tx = w3.eth.account.sign_transaction(tx_func.build_transaction(tx_params), RELAYER_PRIVATE_KEY)
                             
-                            # Send
                             tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
                             logger.info(f"   >>> TX Sent: {tx_hash.hex()}")
                             
-                            # Wait for Confirmation (Prevents silent drops)
                             receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
                             if receipt.status == 1:
-                                logger.info(f"   ✅ TX Confirmed in Block {receipt.blockNumber}")
+                                logger.info(f"   ✅ TX Confirmed")
                             else:
                                 logger.error(f"   ❌ TX Reverted on-chain!")
 
                         except ContractLogicError as cle:
-                            # Usually means another bot executed it first
                             logger.debug(f"   >>> Skipped (Race/Logic): {cle}")
                         except TimeExhausted:
-                            logger.warning(f"   ⚠️ TX Timeout (Network Congested), will retry next loop.")
+                            logger.warning(f"   ⚠️ TX Timeout (Network Congested)")
                         except Exception as tx_err:
                             logger.error(f"   >>> TX Failure: {tx_err}")
 
@@ -154,7 +157,6 @@ async def monitor_and_execute_jobs():
         except Exception as e:
             logger.error(f"Global Loop Error: {e}")
         
-        # Sleep approx 1 block time
         await asyncio.sleep(10)
 
 # ==========================================
@@ -186,7 +188,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("🔌 System Shutdown.")
 
-app = FastAPI(title="Syscall Heartbeat Relayer", version="2.2.0", lifespan=lifespan)
+app = FastAPI(title="Syscall Heartbeat Relayer", version="2.3.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -198,10 +200,6 @@ app.add_middleware(
 
 if not os.path.exists("static"): os.makedirs("static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# ==========================================
-#                ENDPOINTS
-# ==========================================
 
 @app.get("/")
 async def serve_frontend():
@@ -217,7 +215,6 @@ def get_config():
 
 @app.get("/logs")
 def get_logs():
-    """Returns the last 100 log lines from the in-memory buffer."""
     return list(log_buffer)
 
 if __name__ == "__main__":
