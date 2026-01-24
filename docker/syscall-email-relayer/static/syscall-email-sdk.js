@@ -1,4 +1,4 @@
-/* SYSCALL-EMAIL-SDK - ELITE EDITION v2.7 (Client-Side Turbo) */
+/* SYSCALL-EMAIL-SDK - ELITE EDITION v2.9 (Backoffice Fix + Turbo) */
 
 (function(global) {
     let ethers;
@@ -64,71 +64,69 @@
             await this._fetchConfig();
             if (this.provider) return;
             
-            // Strict check: if no config, we cannot proceed
             if (!this.config || !this.config.rpc_url) {
                 throw new Error("SDK Initialization Failed: Missing Relayer Configuration");
             }
 
             this.provider = new ethers.JsonRpcProvider(this.config.rpc_url);
-            
-            // [OPTIMISATION 1] Force le SDK à vérifier la blockchain toutes les 50ms
-            // Cela affecte toutes les lectures faites via ce provider
             this.provider.pollingInterval = 50; 
         }
 
-        // --- WRITE INIT (METAMASK) ---
+        // --- WRITE INIT (METAMASK OR PRIVATE KEY) ---
         async _initSigner() {
             await this._initProvider();
             if (this.signer) return;
 
             if (typeof this.signerSource === 'string') {
+                // Backoffice Mode (Private Key)
                 this.signer = new ethers.Wallet(this.signerSource, this.provider);
             } else {
+                // Frontoffice Mode (MetaMask)
                 const browserProvider = new ethers.BrowserProvider(this.signerSource || window.ethereum);
                 this.signer = await browserProvider.getSigner();
             }
         }
 
-        /**
-         * [OPTIMISATION 2] _pollReceipt
-         * Remplace tx.wait().
-         * Au lieu d'attendre que MetaMask (lent) nous notifie, on bombarde 
-         * le nœud RPC directement pour savoir si la TX est passée.
-         */
         async _pollReceipt(txHash) {
             let attempts = 0;
-            const maxAttempts = 400; // ~20 secondes max (400 * 50ms)
+            const maxAttempts = 400; 
             
             while (attempts < maxAttempts) {
                 try {
-                    // Appel direct au RPC (très rapide)
                     const receipt = await this.provider.getTransactionReceipt(txHash);
-                    
                     if (receipt && receipt.blockNumber) {
-                        return receipt; // Transaction minée !
+                        return receipt; 
                     }
-                } catch (e) {
-                    // Ignorer les erreurs réseau temporaires pendant le polling
-                }
-                
-                // Attendre 50ms avant de réessayer
+                } catch (e) {}
                 await new Promise(resolve => setTimeout(resolve, 50));
                 attempts++;
             }
             throw new Error("Transaction validation timed out (Custom Polling)");
         }
 
+        async _getFastTxOptions(gasLimit) {
+            const options = { gasLimit: BigInt(gasLimit) };
+            try {
+                const feeData = await this.provider.getFeeData();
+                if (feeData.maxFeePerGas != null && feeData.maxPriorityFeePerGas != null) {
+                    options.maxFeePerGas = feeData.maxFeePerGas;
+                    options.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
+                } else if (feeData.gasPrice != null) {
+                    options.gasPrice = feeData.gasPrice;
+                }
+            } catch (e) {
+                console.warn("[SDK] Fee fetch failed, falling back to defaults.", e);
+            }
+            return options;
+        }
+
         async getServicePrice(serviceName) {
             try {
                 await this._initProvider(); 
-                
-                if (!this.config || !this.config.contract_address) {
-                    return "0";
-                }
+                if (!this.config || !this.config.contract_address) return "0";
 
                 const contract = new ethers.Contract(this.config.contract_address, SYSCALL_ABI, this.provider);
                 const priceWei = await contract.services(serviceName);
-                
                 return ethers.formatEther(priceWei); 
             } catch (e) {
                 console.error("[SDK] Price Fetch Error:", e);
@@ -155,14 +153,26 @@
 
                 console.log(`[SDK] 🔐 Secret Generated: ${secret.substring(0, 10)}...`);
                 
-                // 1. Envoi via MetaMask (Signature User)
-                const tx = await contract.pay(serviceName, messageBytes, commitment, { value: totalCost });
+                // Get Base Overrides (Gas Limit + Fees)
+                const overrides = await this._getFastTxOptions(1000000);
+                overrides.value = totalCost;
+
+                // [FIX BACKOFFICE] 
+                // Si on utilise une clé privée (string), on doit calculer le nonce manuellement
+                // en utilisant "latest" car le RPC MegaETH rejette souvent "pending".
+                if (typeof this.signerSource === 'string') {
+                    const address = await this.signer.getAddress();
+                    // Force le nonce basé sur le dernier bloc validé (comme l'ancien SDK)
+                    const nonce = await this.provider.getTransactionCount(address, "latest");
+                    overrides.nonce = nonce;
+                    console.log(`[SDK] ⚙️ Backoffice Mode: Forced Nonce ${nonce} (latest)`);
+                }
+
+                const tx = await contract.pay(serviceName, messageBytes, commitment, overrides);
                 this.secrets.save(tx.hash, secret);
                 
                 console.log(`[SDK] TX Sent: ${tx.hash}`);
                 
-                // 2. [ACTIVATE TURBO] On n'utilise PAS await tx.wait() ici.
-                // On utilise notre poller ultra-rapide sur le RPC direct.
                 const receipt = await this._pollReceipt(tx.hash);
 
                 const result = await this._revealAndDispatch(
