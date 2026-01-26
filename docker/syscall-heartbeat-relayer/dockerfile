@@ -13,7 +13,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY syscall-heartbeat-relayer.py .
 COPY static/ ./static/
 
-# Environment variables should be injected by Docker Compose/Run
-EXPOSE 8080
-
 CMD ["python", "syscall-heartbeat-relayer.py"]
