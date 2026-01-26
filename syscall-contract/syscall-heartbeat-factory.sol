@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.33;
 
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -11,30 +11,34 @@ import "./syscall-heartbeat-job.sol";
  * @dev Uses EIP-1167 minimal proxies for gas efficiency.
  */
 contract SyscallHeartbeatFactory is Ownable {
-    address public implementation; 
+    address public implementation;
     address[] public allJobs;      
 
     mapping(address => uint256) public jobIndexes;
     mapping(address => bool) public isJob;
 
-    // [CHANGE] Now state variables, not constants
-    uint256 public minInitialDeposit;
-    uint256 public solvencyThreshold;
+    // --- Dynamic Gas Configuration (Modifiable by Owner) ---
+    uint256 public gasOverhead;
+    uint256 public relayerFeeGas;
+    uint256 public factoryFeeGas;
+    uint256 public solvencyThresholdGas;
+    uint256 public minInitialDepositGas;
 
     event JobCreated(address indexed jobAddress, address indexed owner, uint256 interval);
     event JobRemoved(address indexed jobAddress);
     event FeesWithdrawn(address indexed owner, uint256 amount);
     event ImplementationUpdated(address oldImpl, address newImpl);
-    // [CHANGE] New event for settings update
-    event SettingsUpdated(uint256 newMinDeposit, uint256 newSolvencyThreshold);
+    event GasSettingsUpdated(uint256 overhead, uint256 relayerFee, uint256 factoryFee, uint256 solvencyThreshold, uint256 minInitialDeposit);
 
-    constructor(address _implementation) Ownable(msg.sender) {
-        require(_implementation != address(0), "Invalid implementation address");
-        implementation = _implementation;
+    constructor() Ownable(msg.sender) {
+        implementation = address(new SyscallHeartbeatJob());
         
-        // [CHANGE] Set default values as requested
-        minInitialDeposit = 0.003 ether;
-        solvencyThreshold = 0.001 ether;
+        // Initialize default values
+        gasOverhead = 100000;
+        relayerFeeGas = 50000;
+        factoryFeeGas = 20000;
+        solvencyThresholdGas = 300000;
+        minInitialDepositGas = 1000000000;
     }
 
     receive() external payable {}
@@ -45,16 +49,27 @@ contract SyscallHeartbeatFactory is Ownable {
         implementation = _newImplementation;
     }
 
-    /**
-     * @notice Allows owner to update financial parameters dynamically.
-     * @param _minDeposit New minimum deposit for creating a job.
-     * @param _solvencyThreshold New threshold below which jobs are killed.
-     */
-    function updateSettings(uint256 _minDeposit, uint256 _solvencyThreshold) external onlyOwner {
-        require(_minDeposit >= _solvencyThreshold, "Deposit must cover solvency threshold");
-        minInitialDeposit = _minDeposit;
-        solvencyThreshold = _solvencyThreshold;
-        emit SettingsUpdated(_minDeposit, _solvencyThreshold);
+    // [WRITE] Single function to update ALL gas settings
+    function updateGasSettings(
+        uint256 _gasOverhead, 
+        uint256 _relayerFeeGas, 
+        uint256 _factoryFeeGas, 
+        uint256 _solvencyThresholdGas,
+        uint256 _minInitialDepositGas
+    ) external onlyOwner {
+        gasOverhead = _gasOverhead;
+        relayerFeeGas = _relayerFeeGas;
+        factoryFeeGas = _factoryFeeGas;
+        solvencyThresholdGas = _solvencyThresholdGas;
+        minInitialDepositGas = _minInitialDepositGas;
+        
+        emit GasSettingsUpdated(_gasOverhead, _relayerFeeGas, _factoryFeeGas, _solvencyThresholdGas, _minInitialDepositGas);
+    }
+
+    // [READ] Single function to read ALL gas settings
+    // Returns 5 values now (added minInitialDepositGas at the end)
+    function getGasSettings() external view returns (uint256, uint256, uint256, uint256, uint256) {
+        return (gasOverhead, relayerFeeGas, factoryFeeGas, solvencyThresholdGas, minInitialDepositGas);
     }
 
     function withdrawFees() external onlyOwner {
@@ -69,19 +84,20 @@ contract SyscallHeartbeatFactory is Ownable {
         require(_intervalSeconds > 0, "Interval must be > 0");
         require(_target != address(0), "Invalid target");
         
-        // [CHANGE] Use the dynamic variable
-        require(msg.value >= minInitialDeposit, "Deposit too low");
+        // Use the state variable directly for logic check
+        uint256 requiredDeposit = minInitialDepositGas * tx.gasprice;
+        require(msg.value >= requiredDeposit, "Deposit too low");
 
         address clone = Clones.clone(implementation);
         SyscallHeartbeatJob(payable(clone)).initialize(msg.sender, address(this), _target, _data, _intervalSeconds);
-
+        
         (bool sent, ) = clone.call{value: msg.value}("");
         require(sent, "Failed to transfer initial credit");
 
         jobIndexes[clone] = allJobs.length; 
         allJobs.push(clone);
         isJob[clone] = true;
-        
+
         emit JobCreated(clone, msg.sender, _intervalSeconds);
     }
 
@@ -100,8 +116,8 @@ contract SyscallHeartbeatFactory is Ownable {
 
         allJobs.pop();                   
         delete jobIndexes[jobToRemove];  
-        delete isJob[jobToRemove];       
-
+        delete isJob[jobToRemove];
+        
         emit JobRemoved(jobToRemove);
     }
 
