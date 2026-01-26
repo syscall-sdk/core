@@ -1,16 +1,11 @@
-mainnet frontier v12 :
-syscall-wallet : https://megaeth.blockscout.com/address/0x5D7AD1fBcf15d9C69D31F431e4930ca0c96666B4
-syscall-contract : https://megaeth.blockscout.com/address/0xA8Bdb75FaeE825c24A3DCEE870cd415773B31a8f
+MegaETH testnet : syscall-heartbeat-factory : 	0x991B72442d4B8Fb179a52E0E27C7aBbDc282EFBF
+MegaETH testnet : syscall-helloworld 1 : 	0x9d15efaddc8d147f5dad9c161e1a032ef95cf366 / sayHello()
+MegaETH testnet : syscall-helloworld 2 : 	0x53ca10c4c5b80467348cd4cf8dd39343dad5067c / sayHello()
+MegaETH testnet : syscall-helloworld 3 : 	0x69cf7952ab643d1c34fa942d6b8a7580568d22c0 / sayHello()
 
-mainnet frontier v20 :
-syscall-wallet : https://megaeth.blockscout.com/address/0x5D7AD1fBcf15d9C69D31F431e4930ca0c96666B4
-syscall-contract : https://megaeth.blockscout.com/address/0xc980133c42914ae2d240f3dafe1295fc4f10ecb2
+MegaETH mainnet : syscall-heartbeat-factory : 	0xd9E8127496E7D5EBd03697114e8d23A348ADDbdb
+MegaETH mainnet : syscall-helloworld 1 : 	0x5a8631B7d2b225FaeD781Bb94f0FF321554cD3E0 / sayHello()
+MegaETH mainnet : syscall-helloworld 2 : 	0x7b17BB9CeF23753d3F27392B8506F2CDfe2F7B27 / sayHello()
+MegaETH mainnet : syscall-helloworld 3 :	0xb51e83Ac52a282a2b467Bf55680E6D1FB4a127E1 / sayHello()
 
-syscall-heartbeat-job : 0x1b545427d7A02E15F7F3638CE22733Fb39E64e04
-syscall-heartbeat-factory : 0x2C6d8dA095Af76cedC070236C7A8DC2cF8D3d9D8
-
-syscall-helloworld 1 : 0xFcd1250598Da5E060292702d15Ce9E062C330ef7
-syscall-helloworld 2 : 0x0636fB400E11593D2c4EceD766F6806aFc75F9Fe
-syscall-helloworld 3 : 0xBa83f00465eAa07D7338A4bf6Cdd6c26cDA1038C
-syscall-helloworld 4 : 0xbb62C5303DFfe7e7227e45134F29E87750a6C942
-syscall-helloworld 5 : 0x7aC67B2A58FE3b7Cc0834804AF121FAB23F59F2B
+MegaETH mainnet : syscall-contract : 		0xc980133c42914ae2d240f3dafe1295fc4f10ecb2
