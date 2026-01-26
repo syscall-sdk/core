@@ -4,6 +4,7 @@ MegaETH testnet : syscall-helloworld 2 : 	0x53ca10c4c5b80467348cd4cf8dd39343dad5
 MegaETH testnet : syscall-helloworld 3 : 	0x69cf7952ab643d1c34fa942d6b8a7580568d22c0 / sayHello()
 
 MegaETH mainnet : syscall-heartbeat-factory : 	0xd9E8127496E7D5EBd03697114e8d23A348ADDbdb
+MegaETH mainnet : syscall-heartbeat-job : 	0xEACfCD7C90aa7B391B445633a4cBCb6Aa6Cc21Dd
 MegaETH mainnet : syscall-helloworld 1 : 	0x5a8631B7d2b225FaeD781Bb94f0FF321554cD3E0 / sayHello()
 MegaETH mainnet : syscall-helloworld 2 : 	0x7b17BB9CeF23753d3F27392B8506F2CDfe2F7B27 / sayHello()
 MegaETH mainnet : syscall-helloworld 3 :	0xb51e83Ac52a282a2b467Bf55680E6D1FB4a127E1 / sayHello()
