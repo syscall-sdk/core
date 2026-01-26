@@ -1,4 +1,3 @@
-
 // app.js - Syscall Heartbeat Frontend Logic (Strict Mode)
 // Relies on global SyscallHeartbeat class from SDK
 
@@ -19,6 +18,7 @@ const jobsContainer = document.getElementById('jobsListContainer');
 const searchInput = document.getElementById('searchInput');
 const refreshBtn = document.getElementById('refreshBtn');
 const liveFeedContainer = document.getElementById('liveFeedContainer');
+const noticeText = document.getElementById('noticeText'); 
 
 let allJobsData = [];
 
@@ -44,7 +44,6 @@ try {
     console.error("SDK Init Error:", e);
 }
 
-// Read-Only Init for Explorer and Feed
 async function initUI() {
     if (!sdk) {
         logToTerminal("❌ FATAL: SDK failed to load.", "error");
@@ -56,9 +55,9 @@ async function initUI() {
             factoryDisplay.innerText = sdk.config.factory_address;
             logToTerminal(`System Online. Chain ID: ${sdk.config.chain_id}`, "system");
             
-            // Load Passive components
             fetchAndRenderJobs();
             startLiveFeed();
+            updateDynamicDepositUI();
         }
     } catch(e) {
         console.error(e);
@@ -68,21 +67,38 @@ async function initUI() {
 }
 initUI();
 
-// ============================================================
-// 🔄 NETWORK SWITCHER (FULLY DYNAMIC)
-// ============================================================
+// Updated Dynamic Price Calculation (Strict Contract Values)
+async function updateDynamicDepositUI() {
+    try {
+        const gasPrice = await sdk.getGasPrice();
+        const minGas = await sdk.getFactoryMinGas();
+        
+        const minDepositWei = minGas * gasPrice;
+        const minDepositEth = ethers.formatEther(minDepositWei);
+        const formattedMin = parseFloat(minDepositEth).toFixed(5);
+        
+        // Update UI with exact contract requirement
+        noticeText.innerHTML = `LIVE ON MegaETH: <strong>Whitelist</strong> required. Min deposit <strong>${formattedMin} ETH</strong>.`;
+        
+        depositInput.placeholder = formattedMin;
+        depositInput.value = formattedMin;
+
+    } catch (e) {
+        console.error("Failed to update dynamic pricing", e);
+        noticeText.innerText = "Network Status: Online (Pricing Unavailable)";
+    }
+}
+
+// --- NETWORK SWITCHER ---
 async function switchToTargetNetwork(dynamicRpcUrl, dynamicChainIdHex) {
     try {
         logToTerminal(`🔄 Requesting Switch to Chain ${dynamicChainIdHex}...`, "system");
-        
         await window.ethereum.request({
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: dynamicChainIdHex }],
         });
         return true;
-
     } catch (switchError) {
-        // Error 4902: Network not found -> Add it
         if (switchError.code === 4902) {
             logToTerminal("➕ Network not found. Adding it...", "warn");
             try {
@@ -108,51 +124,30 @@ async function switchToTargetNetwork(dynamicRpcUrl, dynamicChainIdHex) {
     }
 }
 
-// ============================================================
-// 🛡️ SECURITY & DIAGNOSTICS (STRICT)
-// ============================================================
+// --- SECURITY & DIAGNOSTICS ---
 async function runDiagnostics(initialProvider) {
     logToTerminal("🔍 Running Pre-Flight Checks...", "system");
     let currentProvider = initialProvider;
 
     if (!window.ethereum) throw new Error("MetaMask/Web3 Wallet not found.");
 
-    // 1. Config Check
     try { await sdk._fetchConfig(); } 
     catch (e) { throw new Error("CRITICAL: Failed to load config from Relayer."); }
     
     const config = sdk.config;
-    if (!config || !config.rpc_url || !config.factory_address || !config.chain_id) {
-        throw new Error("Configuration Error: Missing parameters.");
-    }
-
-    const rpcUrl = config.rpc_url;
-    const factoryAddress = config.factory_address;
     const targetChainId = BigInt(config.chain_id);
     const targetChainIdHex = "0x" + config.chain_id.toString(16);
 
-    logToTerminal(`   Relayer RPC: ${rpcUrl}`, "data");
-    logToTerminal(`   Target Chain: ${targetChainId}`, "data");
-
-    // 2. Network Check
     const network = await currentProvider.getNetwork();
     if (network.chainId !== targetChainId) {
-        logToTerminal(`⚠️ Wrong Network. Switching to ${targetChainId}...`, "warn");
-        await switchToTargetNetwork(rpcUrl, targetChainIdHex);
-        
-        // Critical Refresh
+        logToTerminal(`⚠️ Wrong Network. Switching...`, "warn");
+        await switchToTargetNetwork(config.rpc_url, targetChainIdHex);
         await new Promise(r => setTimeout(r, 1000));
         currentProvider = new ethers.BrowserProvider(window.ethereum);
-        const newNetwork = await currentProvider.getNetwork();
-        if (newNetwork.chainId !== targetChainId) {
-            throw new Error(`Network switch failed. Stuck on ${newNetwork.chainId}.`);
-        }
-        logToTerminal("✅ Network Switched Successfully.", "success");
     }
 
-    // 3. Contract Check
-    const code = await currentProvider.getCode(factoryAddress);
-    if (code === "0x") throw new Error(`CRITICAL: No Factory found at ${factoryAddress}`);
+    const code = await currentProvider.getCode(config.factory_address);
+    if (code === "0x") throw new Error(`CRITICAL: No Factory found at ${config.factory_address}`);
 
     logToTerminal("✅ System Ready.", "success");
     return true;
@@ -160,7 +155,6 @@ async function runDiagnostics(initialProvider) {
 
 // --- LIVE FEED LOGIC ---
 async function startLiveFeed() {
-    logToTerminal("📡 Connecting to Live Feed...", "system");
     setInterval(async () => {
         if (!sdk) return;
         try {
@@ -188,7 +182,6 @@ function renderFeed(logs) {
             <span class="${cssClass}">${msg}</span>
         </div>`;
     });
-    const isAtBottom = liveFeedContainer.scrollHeight - liveFeedContainer.scrollTop === liveFeedContainer.clientHeight;
     liveFeedContainer.innerHTML = html;
     liveFeedContainer.scrollTop = liveFeedContainer.scrollHeight;
 }
@@ -210,14 +203,11 @@ async function fetchAndRenderJobs() {
             jobsContainer.innerHTML = `<div class="text-content" style="text-align:center;">No Jobs found.</div>`;
             return;
         }
-        jobsContainer.innerHTML = `<div class="text-content" style="text-align:center;">Loading ${jobAddresses.length} jobs...</div>`;
         const promises = jobAddresses.map(addr => sdk.getJobDetails(addr));
         const jobs = await Promise.all(promises);
-        allJobsData = jobs.filter(j => j !== null);
-        allJobsData.reverse(); 
+        allJobsData = jobs.filter(j => j !== null).reverse(); 
         renderJobs(allJobsData);
     } catch (e) {
-        console.error(e);
         jobsContainer.innerHTML = `<div class="log-error">Error: ${e.message}</div>`;
     }
 }
@@ -249,7 +239,6 @@ function renderJobs(jobs) {
     });
     jobsContainer.innerHTML = html;
     
-    // Bind Action Buttons
     document.querySelectorAll('.btn-add').forEach(b => {
         b.addEventListener('click', async (e) => {
             const addr = e.target.getAttribute('data-addr');
@@ -265,12 +254,11 @@ function renderJobs(jobs) {
     });
 }
 
-// --- ACTION HANDLERS ---
 async function handleTopUp(address, amount) {
     try {
         logToTerminal(`⛽ Topping up ${address}...`, "system");
         await runDiagnostics(new ethers.BrowserProvider(window.ethereum)); 
-        const tx = await sdk.topUpJob(address, amount);
+        await sdk.topUpJob(address, amount);
         logToTerminal(`✅ Top Up Successful!`, "success");
         setTimeout(fetchAndRenderJobs, 1000);
     } catch(e) { logToTerminal(`❌ Top Up Failed: ${e.message}`, "error"); }
@@ -312,7 +300,6 @@ if (btn) {
             btn.innerHTML = "⏳ DIAGNOSTICS...";
             terminal.innerHTML = ""; 
             
-            // 1. Run Diagnostics (Switch network if needed)
             const provider = new ethers.BrowserProvider(window.ethereum);
             await runDiagnostics(provider);
 
@@ -322,20 +309,14 @@ if (btn) {
             logToTerminal("--- INITIATING DEPLOYMENT ---", "system");
             btn.innerHTML = "🖊️ SIGNING TX...";
 
-            // 2. Execute Deploy
             const result = await sdk.deployJob(target, calldata, interval, deposit);
-
             logToTerminal(`🚀 TX Sent: ${result.txHash}`, "data");
-            btn.innerHTML = "⛓️ CONFIRMING...";
             logToTerminal("✅ JOB DEPLOYED SUCCESSFULLY", "success");
             
             if (result.jobAddress) {
-                logToTerminal(`   Job Address: ${result.jobAddress}`, "success");
                 setTimeout(fetchAndRenderJobs, 2000);
             }
-
         } catch (error) {
-            console.error(error);
             const errMsg = error.reason || error.message || "Unknown error";
             logToTerminal(`❌ FAILED: ${errMsg}`, "error");
         } finally {
