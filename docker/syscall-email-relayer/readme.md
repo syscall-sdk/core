@@ -2,121 +2,105 @@
 
 **Syscall Email** is a decentralized bridge enabling EVM smart contracts to trigger real-world emails. 
 
-Unlike centralized Web2 APIs (SendGrid, Mailgun), Syscall Email uses a **Commit-Reveal** cryptographic scheme. The content and dispatch instructions are cryptographically linked to the on-chain payment, ensuring that the Relayer cannot spoof or censor messages without breaking mathematical proofs.
+We abstract the complexity of SMTP servers and cryptographic proofs into a single line of JavaScript. You pay in ETH/Gas, we deliver the message. Security is enforced via a **Commit-Reveal** cryptographic handshake.
 
 ---
 
-## ⚡ The Logic: Commit-Reveal
+## ⚡ The SDK (Client-Side)
 
-We do not simply "listen to events". We enforce a strict security handshake:
+Stop running servers. Use the official SDK to inject Email capabilities directly into your Dapp or Bot.
 
-1.  **COMMIT (On-Chain):** The user/contract calculates the cost (Gas + Protocol Fee) and submits a hash of a randomly generated `secret`.
-2.  **REVEAL (Off-Chain):** The SDK sends the payload + the raw `secret` to the Relayer via HTTPS.
-3.  **VERIFY & DISPATCH:** The Relayer hashes the `secret`. If it matches the on-chain commitment, the email is sent via SMTP.
-4.  **CONSUME:** The Relayer marks the payment as `consumed` on-chain to prevent replay attacks.
+### 📥 Download
+**Latest Build (v2.9):**
+`https://syscall-email-relayer.syscall-sdk.com/static/syscall-email-sdk.js`
 
 ---
 
-## 🚀 Quick Start (Integration)
+## 💻 Integration Guide
 
-### 1. Browser Integration (Dapps)
-Allow your Dapp users to send emails directly from their wallet (MetaMask, etc.).
+### A. Browser (Dapps & Frontends)
+Perfect for sending transaction receipts, alerts, or welcome emails directly from the user's wallet.
 
-```javascript
-import { Syscall } from './syscall-email-sdk.js';
-
-// Initialize with window.ethereum
-const syscall = new Syscall(window.ethereum);
-
-// Trigger Action (Requires Wallet Signature)
-const tx = await syscall.sendEmail(
-    "alice@example.com",       // Destination
-    "Yield Alert",             // Subject
-    "DeFi Protocol",           // Sender Name
-    "Your position is low."    // Content body
-);
-
-console.log(`Proof: ${tx.txHash}`);
+**1. Include the SDK**
+```html
+<script src="[https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js](https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js)"></script>
+<script src="[https://syscall-email-relayer.syscall-sdk.com/static/syscall-email-sdk.js](https://syscall-email-relayer.syscall-sdk.com/static/syscall-email-sdk.js)"></script>
 ```
 
-### 2. Backend Integration (Node.js)
-Ideal for monitoring bots, server-side notifications, or CI/CD pipelines triggered by chain state.
-
+**2. Execute**
 ```javascript
-require('dotenv').config();
-const Syscall = require('./syscall-email-sdk');
+// Initialize with window.ethereum (MetaMask, Rabin, etc.)
+const syscall = new Syscall(window.ethereum); //
+
+async function sendReceipt() {
+    try {
+        // Triggers wallet signature + Payment
+        const receipt = await syscall.sendEmail(
+            "alice@example.com",       // Destination
+            "Payment Confirmed",       // Subject
+            "DeFi Protocol",           // Sender Name
+            "Your transaction 0x123... was successful." // Content Body
+        );
+
+        console.log("Proof of Dispatch:", receipt.txHash);
+        console.log("Secret Revealed:", receipt.secret); //
+    } catch (err) {
+        console.error("Syscall Error:", err);
+    }
+}
+```
+
+### B. Backend (Node.js / Bots)
+Ideal for monitoring scripts, server-side alerts, or CI/CD pipelines triggered by on-chain events.
+
+**1. Setup**
+Download `syscall-email-sdk.js` to your project root.
+```bash
+npm install ethers
+wget [https://syscall-email-relayer.syscall-sdk.com/static/syscall-email-sdk.js](https://syscall-email-relayer.syscall-sdk.com/static/syscall-email-sdk.js)
+```
+
+**2. Execute**
+```javascript
+const Syscall = require('./syscall-email-sdk'); //
 
 // Initialize with a Private Key (Backoffice Mode)
-const syscall = new Syscall(process.env.ADMIN_PRIVATE_KEY);
+const syscall = new Syscall(process.env.ADMIN_PRIVATE_KEY); //
 
-await syscall.sendEmail(
-    "admin@platform.com",
-    "Server Status",
-    "Watchdog",
-    "System Critical Error: 0x54F..."
-);
+async function runMonitor() {
+    console.log("⚡ Triggering Email Alert...");
+    
+    const tx = await syscall.sendEmail(
+        "admin@platform.com",
+        "System Critical",
+        "Watchdog Bot",
+        "Error: Liquidity Pool mismatch detected."
+    );
+    
+    console.log(`✅ Sent. TX: ${tx.txHash}`);
+}
+
+runMonitor();
 ```
 
 ---
 
-## ⚙️ Architecture & Stack
+## ⚙️ How It Works (Under the Hood)
 
-### Smart Contract (`SyscallContract.sol`)
-* **Pay-Per-Byte:** Costs are calculated dynamically based on payload size to prevent spam.
-* **Registry:** Maintains a mapping of active services and their unit prices.
-* **State Machine:** Tracks `paymentId` consumption status.
+You don't need to understand this to use it, but here is the security model:
 
-### The Relayer (`syscall-email-relayer.py`)
-* **FastAPI / Async:** High-performance Python gateway.
-* **DoS Protection:** 1MB hard limit per payload.
-* **Background Tasks:** Non-blocking SMTP dispatch.
-* **Chain Writer:** Automatically calls `consumePayment()` on-chain after successful delivery.
+1.  **Commit (On-Chain):** The SDK calculates the cost (Gas + Protocol Fee), generates a random `secret`, and submits its hash to the blockchain.
+2.  **Reveal (Off-Chain):** The SDK sends the email content + the raw `secret` to the Syscall Relayer via HTTPS.
+3.  **Verify:** The Relayer hashes the `secret`. If it matches the on-chain commitment, the email is signed and dispatched via SMTP.
+4.  **Delivery:** The Relayer consumes the payment on-chain to prevent replay attacks.
 
 ---
 
-## 🛠️ Self-Hosting (Run a Node)
+## 🛡️ Pricing & Limits
 
-Become a Relayer and provide infrastructure to the network.
-
-### Prerequisites
-* Python 3.9+
-* An SMTP Server (Postfix, SendGrid, SES)
-* EVM Wallet with dust ETH
-
-### Configuration (`.env`)
-```bash
-SYSCALL-EMAIL-RELAYER-PORT=8080
-SYSCALL-EMAIL-RELAYER-RPC_URL="[https://rpc.megaeth.systems](https://rpc.megaeth.systems)"
-SYSCALL-EMAIL-RELAYER-OWNER_PRIVATE_KEY="0x..."
-SYSCALL-EMAIL-RELAYER-SYSCALL_CONTRACT_ADDRESS="0x..."
-
-# SMTP Settings
-SYSCALL-EMAIL-RELAYER-SMTP_HOST="smtp.provider.com"
-SYSCALL-EMAIL-RELAYER-SMTP_PORT=587
-SYSCALL-EMAIL-RELAYER-SMTP_USER="apikey"
-SYSCALL-EMAIL-RELAYER-SMTP_PASSWORD="secret-password"
-SYSCALL-EMAIL-RELAYER-SMTP_FROM_EMAIL="noreply@syscall-sdk.com"
-```
-
-### Deploy
-1.  **Deploy Contract:** Deploy `SyscallContract.sol` using Remix or Hardhat.
-2.  **Configure Service:** Call `setService("email", pricePerByte)` on the contract.
-3.  **Run Relayer:**
-    ```bash
-    pip install -r requirements.txt
-    python syscall-email-relayer.py
-    ```
-
----
-
-## 🛡️ Security Model
-
-| Threat | Mitigation |
-| :--- | :--- |
-| **Replay Attack** | Relayer calls `consumePayment(id)` on-chain. Contract rejects used IDs. |
-| **Spam / DoS** | Pay-per-byte pricing + 1MB Payload Cap + 1024-bit Secret entropy. |
-| **Censorship** | Commit-Reveal scheme proves the content was paid for. |
-| **Front-running** | The `secret` is never broadcast on-chain, only its hash. |
+* **Model:** Pay-per-byte (ETH). Costs are calculated dynamically based on content size.
+* **Payload Limit:** 1MB max per email.
+* **Delivery:** Instant (dependent on block finality).
 
 ## 📜 License
 
