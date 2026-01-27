@@ -1,4 +1,4 @@
-# SYSCALL EMAIL [v2.1]
+# SYSCALL EMAIL [v2.1.0]
 
 **Syscall Email** is a decentralized bridge enabling EVM smart contracts to trigger real-world emails. 
 
