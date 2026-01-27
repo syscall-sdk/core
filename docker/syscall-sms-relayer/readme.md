@@ -1,4 +1,4 @@
-# SYSCALL SMS [v2.3]
+# SYSCALL SMS [v2.3.0]
 
 **Syscall SMS** is a decentralized bridge enabling EVM smart contracts to trigger real-world SMS text messages. 
 
