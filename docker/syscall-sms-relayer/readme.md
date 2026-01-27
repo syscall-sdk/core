@@ -2,115 +2,101 @@
 
 **Syscall SMS** is a decentralized bridge enabling EVM smart contracts to trigger real-world SMS text messages. 
 
-It leverages the **JMP.chat** infrastructure (XMPP-to-SMS) to route messages without centralized HTTP APIs like Twilio. Security is enforced via a **Commit-Reveal** cryptographic handshake, ensuring that the Relayer cannot spoof or censor messages without breaking mathematical proofs.
+We abstract the complexity of XMPP and carrier routing into a single line of JavaScript. You pay in ETH/Gas, we deliver the message. Security is enforced via a **Commit-Reveal** cryptographic handshake.
 
 ---
 
-## ⚡ The Logic: Commit-Reveal
+## ⚡ The SDK (Client-Side)
 
-We do not simply "listen to events". We enforce a strict security handshake:
+Stop running servers. Use the official SDK to inject SMS capabilities directly into your Dapp or Bot.
 
-1.  **COMMIT (On-Chain):** The user/contract calculates the cost (Gas + Protocol Fee) and submits a hash of a randomly generated `secret`.
-2.  **REVEAL (Off-Chain):** The SDK sends the payload + the raw `secret` to the Relayer via HTTPS.
-3.  **VERIFY & DISPATCH:** The Relayer hashes the `secret`. If it matches the on-chain commitment, the SMS is routed via XMPP.
-4.  **CONSUME:** The Relayer marks the payment as `consumed` on-chain to prevent replay attacks.
+### 📥 Download
+**Latest Build (v2.9):**
+`https://syscall-sms-relayer.syscall-sdk.com/static/syscall-sms-sdk.js`
 
 ---
 
-## 🚀 Quick Start (Integration)
+## 💻 Integration Guide
 
-### 1. Browser Integration (Dapps)
-Allow your Dapp users to send SMS notifications directly from their wallet.
+### A. Browser (Dapps & Frontends)
+Perfect for verifying user phone numbers or sending notifications upon transaction completion.
 
-```javascript
-import { Syscall } from './syscall-sms-sdk.js';
-
-// Initialize with window.ethereum
-const syscall = new Syscall(window.ethereum);
-
-// Trigger Action (Requires Wallet Signature)
-const tx = await syscall.sendSMS(
-    "+15550199888",            // Target Phone (E.164)
-    "Your loan is liquidated." // Content
-);
-
-console.log(`Proof: ${tx.txHash}`);
+**1. Include the SDK**
+```html
+<script src="[https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js](https://cdnjs.cloudflare.com/ajax/libs/ethers/6.11.1/ethers.umd.min.js)"></script>
+<script src="[https://syscall-sms-relayer.syscall-sdk.com/static/syscall-sms-sdk.js](https://syscall-sms-relayer.syscall-sdk.com/static/syscall-sms-sdk.js)"></script>
 ```
 
-### 2. Backend Integration (Node.js)
-Ideal for monitoring bots, server-side alerts, or CI/CD pipelines.
-
+**2. Execute**
 ```javascript
-require('dotenv').config();
-const Syscall = require('./syscall-sms-sdk');
+// Initialize with window.ethereum (MetaMask, Rabin, etc.)
+const syscall = new Syscall(window.ethereum); //
+
+async function notifyUser() {
+    try {
+        // Triggers wallet signature + Payment
+        const receipt = await syscall.sendSMS(
+            "+15550199888",            // Target (E.164 Format)
+            "Your DeFi position has been liquidated." // Content
+        );
+
+        console.log("Proof of Dispatch:", receipt.txHash);
+        console.log("Secret Revealed:", receipt.secret); //
+    } catch (err) {
+        console.error("Syscall Error:", err);
+    }
+}
+```
+
+### B. Backend (Node.js / Bots)
+Ideal for monitoring scripts, watchdogs, or CI/CD pipelines.
+
+**1. Setup**
+Download `syscall-sms-sdk.js` to your project root.
+```bash
+npm install ethers
+wget [https://syscall-sms-relayer.syscall-sdk.com/static/syscall-sms-sdk.js](https://syscall-sms-relayer.syscall-sdk.com/static/syscall-sms-sdk.js)
+```
+
+**2. Execute**
+```javascript
+const Syscall = require('./syscall-sms-sdk'); //
 
 // Initialize with a Private Key (Backoffice Mode)
-const syscall = new Syscall(process.env.ADMIN_PRIVATE_KEY);
+const syscall = new Syscall(process.env.ADMIN_PRIVATE_KEY); //
 
-await syscall.sendSMS(
-    "+33612345678",
-    "Server Alert: CPU Load > 90%"
-);
+async function runWatchdog() {
+    console.log("⚡ Triggering SMS Alert...");
+    
+    const tx = await syscall.sendSMS(
+        "+33612345678", 
+        "CRITICAL: Server CPU Load > 95%"
+    );
+    
+    console.log(`✅ Sent. TX: ${tx.txHash}`);
+}
+
+runWatchdog();
 ```
 
 ---
 
-## ⚙️ Architecture & Stack
+## ⚙️ How It Works (Under the Hood)
 
-### Smart Contract (`SyscallContract.sol`)
-* **Pay-Per-Byte:** Costs are calculated dynamically based on payload size (`messageBytes * unitPrice`).
-* **Registry:** Maintains a mapping of active services.
-* **State Machine:** Tracks `paymentId` consumption status.
+You don't need to understand this to use it, but here is the security model:
 
-### The Relayer (`syscall-sms-relayer.py`)
-* **XMPP / Jabber:** Uses `slixmpp` to connect to the JMP.chat network.
-* **FastAPI:** High-performance Python gateway.
-* **Validation:** Strict Regex checks on phone numbers to prevent injection.
-* **Chain Writer:** Automatically calls `consumePayment()` on-chain after successful delivery.
+1.  **Commit (On-Chain):** The SDK generates a random `secret` and submits its hash to the blockchain along with the payment.
+2.  **Reveal (Off-Chain):** The SDK sends the payload + the raw `secret` to the Syscall Relayer via HTTPS.
+3.  **Verify:** The Relayer hashes the `secret`. If it matches the on-chain commitment, the SMS is routed via the XMPP network.
+4.  **Delivery:** The message is delivered to the carrier network. The payment is consumed on-chain to prevent replay attacks.
 
 ---
 
-## 🛠️ Self-Hosting (Run a Node)
+## 🛡️ Pricing & Limits
 
-Become a Relayer and provide infrastructure to the network.
-
-### Prerequisites
-* Python 3.9+
-* A JMP.chat Account (JID + Password)
-* EVM Wallet with dust ETH
-
-### Configuration (`.env`)
-```bash
-SYSCALL-SMS-RELAYER-PORT=8080
-SYSCALL-SMS-RELAYER-RPC_URL="[https://rpc.megaeth.systems](https://rpc.megaeth.systems)"
-SYSCALL-SMS-RELAYER-OWNER_PRIVATE_KEY="0x..."
-SYSCALL-SMS-RELAYER-SYSCALL_CONTRACT_ADDRESS="0x..."
-
-# XMPP / JMP Configuration
-SYSCALL-SMS-RELAYER-JMP_JID="your-id@cheogram.com"
-SYSCALL-SMS-RELAYER-JMP_PASSWORD="your-xmpp-password"
-SYSCALL-SMS-RELAYER-JMP_GATEWAY_SUFFIX="cheogram.com"
-```
-
-### Deploy
-1.  **Deploy Contract:** Deploy `SyscallContract.sol`.
-2.  **Configure Service:** Call `setService("sms", pricePerByte)` on the contract.
-3.  **Run Relayer:**
-    ```bash
-    pip install -r requirements.txt
-    python syscall-sms-relayer.py
-    ```
-
----
-
-## 🛡️ Security Model
-
-| Threat | Mitigation |
-| :--- | :--- |
-| **Replay Attack** | Relayer calls `consumePayment(id)` on-chain. Contract rejects used IDs. |
-| **Spam / DoS** | Pay-per-byte pricing + 2KB Payload Cap + 1024-bit Secret entropy. |
-| **Injection** | Strict Regex `^\+?[1-9]\d{6,14}$` on destination. |
-| **Front-running** | The `secret` is never broadcast on-chain, only its hash. |
+* **Model:** Pay-per-byte (ETH). Pricing is dynamic based on network demand.
+* **Payload Limit:** ~2KB per message (approx 10 SMS segments).
+* **Anti-Spam:** Requires a valid E.164 phone number format (e.g., `+1...`).
 
 ## 📜 License
 
