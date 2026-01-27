@@ -1,4 +1,4 @@
-# SYSCALL HEARTBEAT
+# SYSCALL HEARTBEAT [v2.4.4]
 
 **Syscall Heartbeat** is a decentralized, permissionless infrastructure that transforms passive EVM smart contracts into active, self-executing agents. 
 
